@@ -1,0 +1,665 @@
+<title>מדריך RAG לראיון</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&family=Assistant:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: עמודה אחת קריאה, סרגל ניווט דביק, כרטיסים רק לפריטים שעומדים בפני עצמם; מסלול ה-pipeline כציר אנכי */
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --ink: #18212f;
+  --muted: #5b6577;
+  --line: #dde1e8;
+  --accent: #1d5fd1;
+  --accent-soft: #e6eefc;
+  --free: #11795a;
+  --free-soft: #e2f4ec;
+  --paid: #a8560b;
+  --paid-soft: #fbeedd;
+  --miss: #9b2c3a;
+  --miss-soft: #f8e5e8;
+  --code-bg: #0f1724;
+  --code-fg: #dbe4f3;
+  --f-display: "Rubik", "Assistant", system-ui, sans-serif;
+  --f-body: "Assistant", "Rubik", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e131b; --surface: #161d28; --ink: #e7ecf4; --muted: #9aa5b8; --line: #283244;
+    --accent: #7aa7ff; --accent-soft: #1b2a45; --free: #4fd1a0; --free-soft: #12302a;
+    --paid: #f0a95b; --paid-soft: #352512; --miss: #ff8a98; --miss-soft: #3a1a20;
+    --code-bg: #0a0f17; --code-fg: #dbe4f3; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e131b; --surface: #161d28; --ink: #e7ecf4; --muted: #9aa5b8; --line: #283244;
+  --accent: #7aa7ff; --accent-soft: #1b2a45; --free: #4fd1a0; --free-soft: #12302a;
+  --paid: #f0a95b; --paid-soft: #352512; --miss: #ff8a98; --miss-soft: #3a1a20;
+  --code-bg: #0a0f17; --code-fg: #dbe4f3; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--f-body);
+  font-size: 17px; line-height: 1.65; direction: rtl;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+.wrap {
+  max-width: 980px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; line-height: 1.25; margin: 0; }
+h2 { font-size: 1.7rem; font-weight: 800; }
+h3 { font-size: 1.15rem; font-weight: 700; }
+p { margin: 0; }
+code, .mono { font-family: var(--f-mono); font-size: 0.86em; }
+:not(pre) > code { background: var(--accent-soft); color: var(--ink); padding: 1px 6px; border-radius: 5px; direction: ltr; unicode-bidi: isolate; }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+/* ---- header + nav */
+header.top { background: var(--surface); border-bottom: 1px solid var(--line); }
+header.top .wrap { padding-block: 40px 28px; display: grid; gap: 14px; }
+.eyebrow { font-family: var(--f-mono); font-size: 0.78rem; letter-spacing: 0.08em; color: var(--accent); text-transform: uppercase; direction: ltr; text-align: right; }
+header h1 { font-size: clamp(1.9rem, 4.6vw, 2.8rem); font-weight: 800; }
+header .lede { color: var(--muted); max-width: 62ch; font-size: 1.08rem; }
+nav.toc { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+nav.toc .wrap { display: flex; gap: 6px; overflow-x: auto; padding-block: 10px; scrollbar-width: thin; }
+nav.toc a { flex: none; text-decoration: none; color: var(--ink); font-weight: 600; font-size: 0.93rem; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); }
+nav.toc a:hover { border-color: var(--accent); color: var(--accent); }
+
+section { padding-block: 44px 8px; scroll-margin-top: 64px; }
+section > .wrap { display: grid; gap: 20px; }
+.sec-head { display: grid; gap: 6px; }
+.sec-head p { color: var(--muted); max-width: 66ch; }
+
+/* ---- quick answers */
+.answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.answer .q { font-family: var(--f-display); font-weight: 700; color: var(--muted); font-size: 0.95rem; }
+.answer .a { font-family: var(--f-display); font-size: 1.45rem; font-weight: 800; }
+.answer ul { margin: 0; padding-inline-start: 20px; display: grid; gap: 4px; }
+
+/* ---- rag type table */
+.table-box { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+table { width: 100%; border-collapse: collapse; min-width: 640px; }
+th, td { text-align: right; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--f-display); font-size: 0.85rem; color: var(--muted); font-weight: 700; background: var(--bg); }
+tr:last-child td { border-bottom: 0; }
+td .en { display: block; font-family: var(--f-mono); font-size: 0.78rem; color: var(--muted); direction: ltr; text-align: right; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.85rem; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.pill.yes { background: var(--free-soft); color: var(--free); }
+.pill.no { background: var(--miss-soft); color: var(--miss); }
+.pill.part { background: var(--paid-soft); color: var(--paid); }
+tr.ours td:first-child { box-shadow: inset -4px 0 0 var(--free); }
+
+/* ---- pipeline */
+.pipe { display: grid; gap: 0; }
+.step { display: grid; grid-template-columns: 48px 1fr; gap: 16px; position: relative; padding-bottom: 22px; }
+.step:not(:last-child)::before { content: ""; position: absolute; right: 23px; top: 48px; bottom: 0; width: 2px; background: var(--line); }
+.step .num { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; font-family: var(--f-display); font-weight: 800; background: var(--accent-soft); color: var(--accent); border: 2px solid var(--accent); z-index: 1; }
+.step .body { display: grid; gap: 8px; min-width: 0; padding-top: 8px; }
+.step .body p { color: var(--muted); }
+.branch { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.lane { border-radius: 10px; padding: 12px 14px; border: 1px solid var(--line); background: var(--surface); display: grid; gap: 4px; min-width: 0; }
+.lane b { font-family: var(--f-display); }
+.lane.free { border-color: var(--free); background: var(--free-soft); }
+.lane.paid { border-color: var(--paid); background: var(--paid-soft); }
+.lane small { color: var(--muted); font-size: 0.88rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-family: var(--f-mono); font-size: 0.78rem; padding: 2px 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); direction: ltr; }
+
+/* ---- topic cards */
+.topics { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.topic { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.topic .tag-en { font-family: var(--f-mono); font-size: 0.78rem; color: var(--accent); direction: ltr; text-align: right; }
+.topic ul { margin: 0; padding-inline-start: 20px; display: grid; gap: 6px; }
+.topic .rule { border-top: 1px dashed var(--line); padding-top: 10px; font-size: 0.95rem; }
+.topic .rule b { color: var(--free); }
+.opts { display: grid; gap: 6px; }
+.opt { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: baseline; font-size: 0.95rem; }
+.opt .k { font-family: var(--f-mono); font-size: 0.8rem; direction: ltr; background: var(--bg); border: 1px solid var(--line); padding: 1px 7px; border-radius: 6px; white-space: nowrap; }
+
+/* ---- lessons */
+.lessons { display: grid; gap: 12px; }
+.lesson { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.lesson > div { padding: 16px 18px; display: grid; gap: 4px; align-content: start; }
+.lesson .bad { border-inline-end: 1px solid var(--line); }
+.lesson .lbl { font-family: var(--f-display); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; }
+.lesson .bad .lbl { color: var(--miss); }
+.lesson .good .lbl { color: var(--free); }
+.lesson h3 { font-size: 1.02rem; }
+.lesson p { color: var(--muted); font-size: 0.96rem; }
+.status { font-size: 0.82rem; font-weight: 700; }
+.status.done { color: var(--free); }
+.status.todo { color: var(--paid); }
+@media (max-width: 640px) { .lesson { grid-template-columns: 1fr; } .lesson .bad { border-inline-end: 0; border-bottom: 1px solid var(--line); } }
+
+/* ---- Q&A */
+.qa { display: grid; gap: 10px; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 0 18px; }
+details[open] { border-color: var(--accent); }
+summary { cursor: pointer; padding: 14px 0; font-family: var(--f-display); font-weight: 700; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; color: var(--accent); font-size: 1.3rem; line-height: 1; }
+details[open] summary::after { content: "−"; }
+details .ans { padding-bottom: 16px; display: grid; gap: 8px; color: var(--ink); }
+details .ans ul { margin: 0; padding-inline-start: 20px; }
+
+/* ---- prompt blocks */
+.prompt-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.prompt-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.prompt-bar .meta { display: grid; gap: 2px; min-width: 0; }
+.prompt-bar .meta small { color: var(--muted); }
+button.copy { font: inherit; font-weight: 700; font-size: 0.92rem; cursor: pointer; border: 0; border-radius: 9px; padding: 8px 16px; background: var(--accent); color: var(--surface); }
+button.copy.ok { background: var(--free); }
+pre.prompt { margin: 0; padding: 20px; background: var(--code-bg); color: var(--code-fg); font-family: var(--f-mono); font-size: 0.84rem; line-height: 1.7; white-space: pre-wrap; word-break: break-word; max-height: 560px; overflow: auto; direction: rtl; text-align: right; unicode-bidi: plaintext; }
+.prompt-tips { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.tip { border-inline-start: 3px solid var(--accent); padding: 4px 12px; display: grid; gap: 2px; }
+.tip b { font-family: var(--f-display); }
+.tip span { color: var(--muted); font-size: 0.94rem; }
+
+footer { padding-block: 40px 56px; color: var(--muted); font-size: 0.9rem; }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="eyebrow">RAG · OCR · Hybrid Search · Interview prep</div>
+    <h1>סוכן שעונה על שאלות ממסמכים סרוקים</h1>
+    <p class="lede">כל מה שבנינו בפרויקט <code>doc-agent</code>, מה חסר בו, מה כל רכיב עושה, ואיזה פרומפט צריך כדי לבנות מערכת כזו מאפס, בצורה טובה יותר.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="תוכן העניינים">
+  <div class="wrap">
+    <a href="#answers">תשובות קצרות</a>
+    <a href="#types">סוגי RAG</a>
+    <a href="#pipeline">איך זה עובד</a>
+    <a href="#topics">רכיב אחרי רכיב</a>
+    <a href="#lessons">מה למדנו</a>
+    <a href="#interview">שאלות ראיון</a>
+    <a href="#prompt">הפרומפט</a>
+    <a href="#meta">בקשה לצ'אט חדש</a>
+  </div>
+</nav>
+
+<!-- ============ תשובות קצרות ============ -->
+<section id="answers">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>תשובות לשאלות ששאלת</h2>
+    </div>
+    <div class="answers">
+      <div class="answer">
+        <div class="q">הפרויקט כתוב ב-LangChain?</div>
+        <div class="a">כן.</div>
+        <ul>
+          <li><code>init_chat_model</code>, <code>init_embeddings</code>: טעינת מודלים לפי מחרוזת <code>provider:model</code></li>
+          <li><code>RecursiveCharacterTextSplitter</code>: חלוקה לקטעים</li>
+          <li><code>InMemoryVectorStore</code>: אינדקס וקטורי</li>
+          <li><code>BM25Retriever</code>: חיפוש מילות מפתח</li>
+        </ul>
+      </div>
+      <div class="answer">
+        <div class="q">זה "סוכן"?</div>
+        <div class="a">לא במובן המקצועי.</div>
+        <p>זה <b>pipeline</b> (שרשרת קבועה): כל שאלה עוברת אותם שלבים באותו סדר. סוכן (agent) הוא מודל שמחליט בעצמו באילו כלים להשתמש ומתי, בדרך כלל עם LangGraph. בראיון כדאי לקרוא לזה <b>RAG pipeline</b>.</p>
+      </div>
+      <div class="answer">
+        <div class="q">איזה RAG בנינו?</div>
+        <div class="a">Hybrid Search RAG</div>
+        <p>חיפוש וקטורי (משמעות) + BM25 (מילים מדויקות), שממוזגים בשיטת <b>RRF</b>. יש גם תשובה עם ציטוט מקור, אפשרות לענות "לא נמצא", והערכה שמודדת אחזור ותשובה בנפרד. <b>אין</b> query rewriting, אין reranker ואין זיכרון שיחה.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ סוגי RAG ============ -->
+<section id="types">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>סוגי RAG: מה יש אצלנו ומה לא</h2>
+      <p>RAG הוא לא דבר אחד. אלה הטכניקות הנפוצות, מהפשוטה למתקדמת. השורות עם הסימון הירוק בצד הן מה שקיים בפרויקט.</p>
+    </div>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>טכניקה</th><th>מה היא עושה</th><th>פותרת את הבעיה של</th><th>אצלנו</th></tr></thead>
+        <tbody>
+          <tr class="ours"><td>RAG בסיסי<span class="en">Naive / Standard RAG</span></td><td>הופכים את השאלה לוקטור, מוצאים את הקטעים הכי דומים, ושולחים אותם למודל.</td><td>מודל שלא מכיר את המסמכים שלך</td><td><span class="pill yes">✓ יש</span></td></tr>
+          <tr class="ours"><td>חיפוש היברידי<span class="en">Hybrid Search (Vector + BM25) + RRF</span></td><td>שני חיפושים במקביל: לפי משמעות ולפי מילים מדויקות. ממזגים לפי הדירוג בכל רשימה.</td><td>שמות, מספרים ותאריכים שחיפוש וקטורי "מטשטש"</td><td><span class="pill yes">✓ יש</span></td></tr>
+          <tr class="ours"><td>תשובה מעוגנת עם ציטוט<span class="en">Grounded generation + citations + abstain</span></td><td>המודל עונה רק מהקטעים, מציין (קובץ, עמוד), ואומר "לא נמצא" כשאין מידע.</td><td>הזיות (hallucinations)</td><td><span class="pill yes">✓ יש</span></td></tr>
+          <tr><td>ניסוח מחדש של השאלה<span class="en">Query Rewriting / Condensation</span></td><td>מודל קטן מנסח את השאלה מחדש לפני החיפוש, ומשלים שאלת המשך לשאלה שעומדת בפני עצמה.</td><td>"ומאיפה היא מגיעה?", ניסוח לא טוב לחיפוש</td><td><span class="pill no">✗ אין</span></td></tr>
+          <tr><td>פירוק לתת-שאלות<span class="en">Query Decomposition / Multi-Query</span></td><td>הודעה עם כמה שאלות מפורקת לשאלות נפרדות, וכל אחת מחפשת בנפרד.</td><td>שתי שאלות ברצף שרק אחת מהן נענית</td><td><span class="pill no">✗ אין</span></td></tr>
+          <tr><td>דירוג מחדש<span class="en">Reranking (Cross-Encoder)</span></td><td>מביאים 20–50 קטעים, ומודל ייעודי מדרג אותם מחדש ובוחר את 5 הטובים.</td><td>קטעים "קרובים אבל לא נכונים"</td><td><span class="pill no">✗ אין</span></td></tr>
+          <tr><td>RAG עם זיכרון שיחה<span class="en">Conversational RAG</span></td><td>היסטוריית השיחה נשלחת לשלב הניסוח מחדש ולמודל.</td><td>שיחה רציפה</td><td><span class="pill no">✗ אין</span></td></tr>
+          <tr><td>ניתוב לפי סוג שאלה<span class="en">Query Routing / Adaptive RAG</span></td><td>מסווגים את השאלה (עובדה / הבנה / סיכום) ובוחרים פרומפט וכמות קטעים מתאימים.</td><td>"מה זה וסת?" שנענית "לא נמצא"</td><td><span class="pill part">תוכנן</span></td></tr>
+          <tr><td>RAG שבודק את עצמו<span class="en">Corrective RAG / Self-RAG</span></td><td>המודל בודק אם הקטעים רלוונטיים, ואם לא, מחפש שוב בניסוח אחר.</td><td>אחזור חלש</td><td><span class="pill no">✗ אין</span></td></tr>
+          <tr><td>RAG סוכני<span class="en">Agentic RAG (LangGraph)</span></td><td>סוכן מחליט בעצמו מתי לחפש, כמה פעמים ובאיזה כלי.</td><td>שאלות מורכבות שדורשות כמה צעדים</td><td><span class="pill no">✗ אין</span></td></tr>
+          <tr><td>RAG על גרף ידע<span class="en">GraphRAG</span></td><td>מחלצים ישויות וקשרים (אדם, מקום, תאריך) לגרף, ומחפשים גם בו.</td><td>"מי היו בני המשפחה של...", קשרים בין מסמכים</td><td><span class="pill no">✗ אין</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ pipeline ============ -->
+<section id="pipeline">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>איך המערכת עובדת, שלב אחרי שלב</h2>
+      <p>אלה השלבים שהקוד מריץ בפועל, אחרי התיקונים שעשינו. בשלב הראשון כל עמוד הולך לאחד משני מסלולים.</p>
+    </div>
+    <div class="pipe">
+      <div class="step">
+        <div class="num">1</div>
+        <div class="body">
+          <h3>קליטת מסמכים <span class="mono" dir="ltr">Ingestion</span></h3>
+          <p>כל עמוד נבדק בנפרד, ויש לו שני מסלולים אפשריים:</p>
+          <div class="branch">
+            <div class="lane free"><b>יש טקסט מובנה ב-PDF → בחינם</b><small>שליפה עם <code>page.get_text()</code> של PyMuPDF. בלי API, בלי טעויות קריאה. בספר הווסתות: 73 מתוך 79 עמודים.</small></div>
+            <div class="lane paid"><b>סריקה או תמונה → עולה כסף</b><small>מודל ראייה (VLM) קורא את התמונה ומחזיר טקסט. מסמן [לא קריא] ו-[?מילה?] במקומות שהוא לא בטוח בהם.</small></div>
+          </div>
+          <div class="chips"><span class="chip">pymupdf</span><span class="chip">gemini-3.5-flash-lite</span><span class="chip">cache: transcripts/*.json</span></div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <div class="body">
+          <h3>חלוקה לקטעים <span class="mono" dir="ltr">Chunking</span></h3>
+          <p>כל עמוד מחולק לקטעים של 800 תווים עם חפיפה של 150 תווים. כל קטע שומר מאיזה קובץ ועמוד הוא הגיע, כדי שיהיה אפשר לצטט אותו.</p>
+          <div class="chips"><span class="chip">RecursiveCharacterTextSplitter</span><span class="chip">chunk_size=800</span><span class="chip">overlap=150</span></div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <div class="body">
+          <h3>בניית האינדקס <span class="mono" dir="ltr">Indexing</span></h3>
+          <p>שני אינדקסים במקביל: וקטורים (embeddings) לחיפוש לפי משמעות, ו-BM25 לחיפוש מילים. ה-embeddings נשלחים בקבוצות של 90 עם דקת המתנה ביניהן, וכל קבוצה נשמרת לדיסק מיד אחרי שהיא מוכנה.</p>
+          <div class="chips"><span class="chip">gemini-embedding-2</span><span class="chip">InMemoryVectorStore</span><span class="chip">BM25Retriever</span><span class="chip">batch=90 / 62s</span></div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">4</div>
+        <div class="body">
+          <h3>אחזור היברידי <span class="mono" dir="ltr">Hybrid Retrieval + RRF</span></h3>
+          <p>כל אחד מהחיפושים מחזיר 10 קטעים. הציון של כל קטע הוא <code>Σ 1/(60+rank)</code> על פני שתי הרשימות, ו-5 הקטעים עם הציון הגבוה ביותר עוברים הלאה. היתרון: אין צורך לנרמל ציונים שמגיעים בסקאלות שונות.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">5</div>
+        <div class="body">
+          <h3>יצירת התשובה <span class="mono" dir="ltr">Generation</span></h3>
+          <p>המודל מקבל את 5 הקטעים ואת השאלה, ואת ההנחיה: לענות רק מהקטעים, לציין (קובץ, עמוד) אחרי כל עובדה, ולכתוב "לא נמצא במסמכים" אם התשובה לא שם. ה-temperature הוא 0.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">6</div>
+        <div class="body">
+          <h3>הערכה <span class="mono" dir="ltr">Evaluation</span></h3>
+          <p>שאלות עם תשובה ידועה מראש. שני מדדים נפרדים: האם הקטע הנכון הגיע (<b>retrieval</b>), והאם התשובה נכונה (<b>answer</b>). אם האחזור נכשל, הבעיה באינדקס. אם רק התשובה נכשלה, הבעיה בתעתוק או בפרומפט.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ topics ============ -->
+<section id="topics">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>רכיב אחרי רכיב: מה צריך לדעת ומה לבחור</h2>
+      <p>כל כרטיס הוא נושא שכדאי לדעת להסביר בראיון. בתחתית כל כרטיס יש את הכלל המעשי.</p>
+    </div>
+    <div class="topics">
+
+      <article class="topic">
+        <div class="tag-en">Free PDF text extraction</div>
+        <h3>שליפת טקסט מ-PDF בחינם</h3>
+        <ul>
+          <li>PDF דיגיטלי (נוצר במחשב) שומר את האותיות עצמן. PDF סרוק הוא רק תמונה.</li>
+          <li>קודם שולפים, ואז בודקים: מספיק אותיות? רוב התווים הם אותיות אמיתיות? אם לא, זה עמוד סרוק או גופן שבור.</li>
+          <li>בעברית: סוגריים ונקודות יוצאים הפוכים. <code>sort=True</code> הופך את סדר המילים, אז לא משתמשים בו.</li>
+        </ul>
+        <div class="opts">
+          <div class="opt"><span class="k">PyMuPDF</span><span>מהיר, הכי טוב לעברית. משמש בפרויקט.</span></div>
+          <div class="opt"><span class="k">pdfplumber</span><span>טוב לטבלאות.</span></div>
+          <div class="opt"><span class="k">pypdf</span><span>פשוט, איטי יותר.</span></div>
+        </div>
+        <p class="rule"><b>הכלל:</b> מחליטים עמוד-עמוד ולא קובץ-קובץ. אם יש טקסט מובנה, לא שולחים את העמוד למודל.</p>
+      </article>
+
+      <article class="topic">
+        <div class="tag-en">OCR / Vision models</div>
+        <h3>זיהוי טקסט מתמונה</h3>
+        <ul>
+          <li><b>OCR קלאסי:</b> מזהה אותיות. זול או חינמי, אבל חלש בכתב יד, בכתב רש"י ובדפים עם כמה טורים.</li>
+          <li><b>VLM (מודל ראייה-שפה):</b> "קורא" את הדף ומבין את המבנה שלו. יקר יותר, אבל הרבה יותר טוב במסמכים ישנים.</li>
+          <li>הסכנה: VLM <b>טועה בביטחון</b>, ובמקום לסמן "לא קריא" הוא ממציא מילה. אצלנו "בשער תיקון הווסתות" הפך ל"בשער תקון כוססות".</li>
+        </ul>
+        <div class="opts">
+          <div class="opt"><span class="k">Tesseract (heb)</span><span>חינמי, מקומי, מתאים לדפוס נקי.</span></div>
+          <div class="opt"><span class="k">Google Document AI / Azure DI</span><span>OCR מסחרי, טוב לטפסים ולטבלאות.</span></div>
+          <div class="opt"><span class="k">Gemini / Claude / GPT (vision)</span><span>VLM לכתב יד ולמסמכים ישנים.</span></div>
+        </div>
+        <p class="rule"><b>הכלל:</b> רזולוציה של 200 DPI, פרומפט שאוסר לתרגם ולתקן, ולשונית שמציגה את התמונה ליד התעתוק כדי לבדוק אותו.</p>
+      </article>
+
+      <article class="topic">
+        <div class="tag-en">Embedding models</div>
+        <h3>מודלי Embedding</h3>
+        <ul>
+          <li>הופכים טקסט לווקטור, כך שטקסטים עם משמעות דומה יוצאים קרובים זה לזה.</li>
+          <li>חייב מודל <b>רב-לשוני</b> שתומך בעברית. מודל שאומן בעיקר על אנגלית ייתן תוצאות חלשות.</li>
+          <li>יש ספקים שמבחינים בין task type של <i>query</i> לזה של <i>document</i>. כדאי להשתמש בזה.</li>
+          <li><b>החלפת מודל = בנייה מחדש של כל האינדקס.</b> לכן שם המודל הוא חלק מהמפתח של ה-cache.</li>
+        </ul>
+        <div class="opts">
+          <div class="opt"><span class="k">gemini-embedding-2</span><span>בשימוש בפרויקט. בשכבה החינמית: 100 בקשות בדקה.</span></div>
+          <div class="opt"><span class="k">text-embedding-3-large</span><span>OpenAI, בתשלום.</span></div>
+          <div class="opt"><span class="k">BGE-M3 / multilingual-e5</span><span>מקומיים וחינמיים, טובים בעברית.</span></div>
+        </div>
+        <p class="rule"><b>הכלל:</b> שולחים בקבוצות מתחת למגבלה, ושומרים כל קטע לדיסק לפי hash של הטקסט שלו.</p>
+      </article>
+
+      <article class="topic">
+        <div class="tag-en">Cost guards &amp; infinite loops</div>
+        <h3>הגנה מלולאות אינסופיות ומעלויות</h3>
+        <ul>
+          <li><b>Budget:</b> מונה קריאות API עם תקרה קשיחה. כל קריאה עוברת דרכו, כולל embeddings.</li>
+          <li>כל הלולאות רצות על רשימה סופית. אין <code>while True</code> סביב קריאת API.</li>
+          <li><code>max_retries=1</code>. ספריות מנסות שוב בשקט כברירת מחדל, וכל ניסיון נספר במכסה.</li>
+          <li>שגיאה עוצרת את הריצה. אחרי 429 לא ממשיכים לעמוד הבא.</li>
+          <li>Rate limiter בין קריאות, ותקרת עמודים לכל ריצה.</li>
+          <li>ב-Streamlit: אין קריאת API ברמה העליונה של הקובץ, כי כל לחיצה מריצה את הקובץ מחדש.</li>
+        </ul>
+        <p class="rule"><b>הכלל:</b> לפני כל פעולה מציגים כמה קריאות היא תעלה, ואחריה מה נעצר ולמה.</p>
+      </article>
+
+      <article class="topic">
+        <div class="tag-en">Chunking &amp; Indexing</div>
+        <h3>חלוקה לקטעים ואינדוקס</h3>
+        <ul>
+          <li><b>קטע קטן</b> (300–500 תווים): מדויק לעובדות, אבל חסר הקשר.</li>
+          <li><b>קטע גדול</b> (1000–1500 תווים): טוב לשאלות הבנה, פחות embeddings, אבל "רועש" יותר.</li>
+          <li><b>חפיפה</b> של 10–20% שומרת על משפט שנחתך בגבול בין שני קטעים.</li>
+          <li><b>Metadata</b>: מקור, עמוד, שיטת שליפה, ובהמשך גם שנה, שפה וסוג מסמך, לסינון.</li>
+          <li>האינדקס נשמר לדיסק. מפתח = hash של (שם המודל + תוכן הקטעים), ולכן כל שינוי בונה אותו מחדש.</li>
+        </ul>
+        <p class="rule"><b>הכלל:</b> ספר רציף → קטעים גדולים יותר. רשימות ותעודות → קטעים קטנים או קטע לכל רשומה.</p>
+      </article>
+
+      <article class="topic">
+        <div class="tag-en">Hebrew-specific retrieval</div>
+        <h3>עברית ו-BM25</h3>
+        <ul>
+          <li>BM25 משווה מילים בדיוק, ולכן "בננה", "הבננה" ו"בננות" נחשבות לשלוש מילים שונות.</li>
+          <li>צריך להסיר <b>stopwords</b> (מה, זה, של, את), אחרת החיפוש מתבסס עליהן.</li>
+          <li>נרמול תחיליות (ו, ה, ב, ל, מ, ש, כ) וצורות יחיד/רבים. אפשר להיעזר בכלים כמו YAP או Stanza.</li>
+          <li>כתיב מלא/חסר ("וסתות"/"ווסתות") וראשי תיבות ("ש"מ", "רמב"ם").</li>
+        </ul>
+        <p class="rule"><b>הכלל:</b> בעברית החיפוש הווקטורי סובל פחות מהבעיות האלה, ולכן כדאי לתת לו משקל גבוה יותר ב-RRF.</p>
+      </article>
+
+      <article class="topic">
+        <div class="tag-en">Prompting the answer model</div>
+        <h3>פרומפט התשובה: שני מצבים</h3>
+        <ul>
+          <li><b>מצב ארכיון:</b> קשוח. רק מהקטעים, ציטוט אחרי כל עובדה, אסור לנחש, "לא נמצא" כשחסר.</li>
+          <li><b>מצב הבנה:</b> מותר לחבר בין כמה קטעים ולהסביר, עדיין עם ציטוט לכל טענה, ו-10–15 קטעים במקום 5.</li>
+          <li>שאלה כפולה: עונים על כל חלק בנפרד, ו"לא נמצא" רק על החלק שחסר.</li>
+        </ul>
+        <p class="rule"><b>הכלל:</b> פרומפט קשוח מדי גורם למודל לוותר, ופרומפט רך מדי גורם לו להמציא. מה שקובע הוא סוג השאלה.</p>
+      </article>
+
+      <article class="topic">
+        <div class="tag-en">Evaluation</div>
+        <h3>הערכה</h3>
+        <ul>
+          <li><b>Retrieval hit@k:</b> האם הקובץ הנכון נמצא בין הקטעים שאוחזרו.</li>
+          <li><b>Answer correctness:</b> האם הערך הצפוי מופיע בתשובה. לשאלות הבנה משתמשים ב-LLM-as-judge.</li>
+          <li>חשוב לכלול שאלות שהתשובה עליהן "לא נמצא", כדי לבדוק שהמודל לא ממציא.</li>
+          <li>כדאי לכלול גם שאלות הבנה, שאלות כפולות ושאלות המשך. אלה בדיוק המקרים שנכשלו אצלנו.</li>
+        </ul>
+        <p class="rule"><b>הכלל:</b> מודדים לפני כל שינוי ואחריו. בלי מדידה אין דרך לדעת אם שינוי בפרומפט שיפר משהו.</p>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============ lessons ============ -->
+<section id="lessons">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>מה השתבש בפרויקט, ולמה</h2>
+      <p>סיפורים אמיתיים כאלה הם החומר הכי חזק לראיון: "הייתה בעיה, ככה אבחנתי אותה, וככה פתרתי".</p>
+    </div>
+    <div class="lessons">
+      <div class="lesson">
+        <div class="bad"><span class="lbl">התסמין</span><h3>"מה זה וסת?" → "לא נמצא", למרות ספר שלם בנושא</h3><p>רק 11 מתוך 79 עמודים נכנסו לאינדקס. תקרת העמודים עצרה את הבנייה, ועל זה הופיעה רק אזהרה קטנה.</p></div>
+        <div class="good"><span class="lbl">הפתרון</span><h3>שליפה חינמית מה-PDF</h3><p>73 עמודים נשלפים עכשיו ישירות מהקובץ, בלי API. התקרה חלה רק על עמודים סרוקים.</p><span class="status done">✓ בוצע</span></div>
+      </div>
+      <div class="lesson">
+        <div class="bad"><span class="lbl">התסמין</span><h3>תעתוק משובש בלי סימון "לא קריא"</h3><p>מודל הראייה קרא כתב רש"י כאותיות מרובעות שגויות, וערבב שורות משני טורים לתוך אותה שורה.</p></div>
+        <div class="good"><span class="lbl">הפתרון</span><h3>טקסט מובנה גובר על תעתוק</h3><p>בעמוד שיש לו טקסט מובנה, הטקסט מהקובץ מחליף את התעתוק הישן. תגית בממשק מראה מאיפה הגיע הטקסט של כל עמוד.</p><span class="status done">✓ בוצע</span></div>
+      </div>
+      <div class="lesson">
+        <div class="bad"><span class="lbl">התסמין</span><h3>שגיאה 429 RESOURCE_EXHAUSTED</h3><p>517 קטעים נשלחו ל-embeddings בבת אחת. בשכבה החינמית כל קטע נספר כבקשה נפרדת, והמגבלה היא 100 בדקה.</p></div>
+        <div class="good"><span class="lbl">הפתרון</span><h3>קבוצות + שמירה לדיסק</h3><p>קבוצות של 90 עם המתנה של 62 שניות. כל קבוצה נשמרת מיד, כך שאחרי שגיאה ממשיכים מאותה נקודה.</p><span class="status done">✓ בוצע</span></div>
+      </div>
+      <div class="lesson">
+        <div class="bad"><span class="lbl">התסמין</span><h3>שתי שאלות בהודעה אחת: רק אחת נענית</h3><p>חיפוש אחד לכל ההודעה, ולכן רוב 5 הקטעים הגיעו לנושא אחד. בנוסף, המסך סימן את כל התשובה כ"לא נמצא".</p></div>
+        <div class="good"><span class="lbl">הפתרון</span><h3>Query decomposition</h3><p>קריאת LLM שמפרקת את ההודעה לתת-שאלות. כל תת-שאלה מקבלת חיפוש ותשובה משלה.</p><span class="status todo">◷ עוד לא בוצע</span></div>
+      </div>
+      <div class="lesson">
+        <div class="bad"><span class="lbl">התסמין</span><h3>שאלות הבנה נענות "לא יודע"</h3><p>הפרומפט מחייב לענות "אך ורק" מהקטעים, ו-5 קטעים לא מספיקים כדי להסביר מושג.</p></div>
+        <div class="good"><span class="lbl">הפתרון</span><h3>שני מצבים + ניתוב</h3><p>מצב ארכיון ומצב הבנה, עם פרומפט וכמות קטעים שונים בכל אחד.</p><span class="status todo">◷ עוד לא בוצע</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ interview ============ -->
+<section id="interview">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>שאלות שעשויות לעלות בראיון</h2>
+      <p>לחצי על שאלה כדי לראות תשובה קצרה שאפשר להגיד בעל פה.</p>
+    </div>
+    <div class="qa">
+      <details><summary>מה ההבדל בין RAG ל-fine-tuning?</summary><div class="ans"><p>ב-RAG המודל לא משתנה. בכל שאלה הוא מקבל את המידע הרלוונטי מבחוץ. זה זול, מתעדכן מיד כשמוסיפים מסמך, ומאפשר לצטט מקור. Fine-tuning משנה את משקלי המודל, ומתאים ללימוד סגנון או פורמט, לא להוספת עובדות שמשתנות.</p></div></details>
+      <details><summary>למה חיפוש היברידי ולא רק וקטורי?</summary><div class="ans"><p>Embeddings טובים במשמעות, אבל "מטשטשים" מחרוזות מדויקות: שם משפחה נדיר, מספר תעודה 4471, שנה. BM25 תופס בדיוק את אלה. השילוב מכסה את שני סוגי השאלות.</p></div></details>
+      <details><summary>מה זה RRF ולמה לא פשוט לחבר את הציונים?</summary><div class="ans"><p>Reciprocal Rank Fusion: לכל קטע מחשבים <code>Σ 1/(k+rank)</code> על פני כל רשימות התוצאות, עם k=60. החיבור מתבסס רק על המיקום ברשימה, ולכן לא צריך לנרמל ציוני cosine וציוני BM25, שמגיעים בסקאלות שונות לגמרי.</p></div></details>
+      <details><summary>איך מונעים הזיות?</summary><div class="ans"><ul><li>פרומפט שמחייב לענות רק מהקטעים, עם ציטוט לכל עובדה</li><li>רשות מפורשת לענות "לא נמצא"</li><li>temperature 0</li><li>הצגת הקטעים שאוחזרו למשתמש לצורך אימות</li><li>שאלות "לא נמצא" בסט ההערכה</li></ul></div></details>
+      <details><summary>איך בוחרים גודל קטע (chunk)?</summary><div class="ans"><p>לפי סוג המסמך וסוג השאלות. קטעים קטנים מתאימים לעובדות ממוקדות, וקטעים גדולים לשאלות הבנה. בפועל בודקים כמה גדלים על סט הערכה ומשווים את hit@k. חפיפה של 10–20% שומרת על משפטים שנחתכים בין קטעים.</p></div></details>
+      <details><summary>איך מטפלים במסמכים סרוקים בעברית?</summary><div class="ans"><p>קודם בודקים אם יש טקסט מובנה, ואם יש משתמשים בו בחינם. אם אין, שולחים ל-VLM עם פרומפט שאוסר לתרגם ולתקן ומחייב סימון אי-ודאות. התעתוק נשמר ב-cache כדי לא לשלם פעמיים. כדאי גם לבנות מסך שמציג את התמונה ליד התעתוק, כי בדרך כלל הבעיה מתחילה בתעתוק ולא באחזור.</p></div></details>
+      <details><summary>איך תטפלי בשאלות המשך בשיחה?</summary><div class="ans"><p>Query condensation: לפני החיפוש, מודל זול מקבל את היסטוריית השיחה ואת השאלה החדשה, ומנסח שאלה שעומדת בפני עצמה. למשל, "ומאיפה היא מגיעה?" הופך ל"מאיפה מגיעה הבננה?". החיפוש נעשה על השאלה המנוסחת מחדש.</p></div></details>
+      <details><summary>איך מודדים שמערכת RAG עובדת?</summary><div class="ans"><p>שני מדדים נפרדים: איכות האחזור (hit@k, recall@k: האם הקטע הנכון הגיע) ואיכות התשובה (התאמה מדויקת, או LLM-as-judge לשאלות פתוחות). ההפרדה אומרת איפה הבעיה: באינדקס או במודל. יש גם כלים כמו RAGAS שמודדים faithfulness ו-answer relevancy.</p></div></details>
+      <details><summary>איך שומרים על עלויות ומונעים לולאות?</summary><div class="ans"><p>מונה קריאות עם תקרה קשיחה שכל קריאה עוברת דרכו, לולאות רק על רשימות סופיות, <code>max_retries</code> נמוך, rate limiter, עצירה בשגיאה הראשונה, cache לכל מה שכבר שולם עליו, ושליחה בקבוצות מתחת למגבלות הספק.</p></div></details>
+      <details><summary>מה ההבדל בין pipeline לסוכן?</summary><div class="ans"><p>ב-pipeline רצף השלבים קבוע מראש בקוד. בסוכן המודל מחליט בעצמו: האם לחפש, באיזה כלי, ואם התוצאה מספיקה או שצריך לחפש שוב. סוכן גמיש יותר, אבל יקר יותר, קשה יותר לחזות מה יעשה, ודורש הגנות חזקות יותר מלולאות.</p></div></details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ prompt ============ -->
+<section id="prompt">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>הפרומפט לבניית המערכת מאפס</h2>
+      <p>להדביק כמו שהוא ב-Claude Code, ב-Cursor או בכל עוזר קוד אחר. הוא כולל את כל הלקחים מהפרויקט, כך שהמערכת החדשה תתחיל מהנקודה שהגענו אליה ולא מההתחלה.</p>
+    </div>
+    <div class="prompt-tips">
+      <div class="tip"><b>למה הוא ארוך</b><span>כל סעיף מונע טעות שכבר קרתה לנו. בלעדיו, העוזר יבחר ברירות מחדל.</span></div>
+      <div class="tip"><b>למה "תכנן קודם"</b><span>כדי לראות את הארכיטקטורה ולתקן אותה לפני שנכתבות אלף שורות קוד.</span></div>
+      <div class="tip"><b>למה מצב FAKE</b><span>כדי לבדוק את כל הקוד בלי לשלם על אף קריאה.</span></div>
+    </div>
+    <div class="prompt-card">
+      <div class="prompt-bar">
+        <div class="meta"><b>פרומפט מלא: מערכת RAG למסמכים סרוקים</b><small>עברית + מונחים טכניים באנגלית</small></div>
+        <button class="copy" type="button" data-target="p-main" id="copy-main">העתקה</button>
+      </div>
+<pre class="prompt" id="p-main"># תפקיד
+את/ה מהנדס/ת AI בכיר/ה שמתמחה ב-RAG, OCR ומסמכים בעברית. בני/בנה מאפס מערכת RAG (Retrieval-Augmented Generation) ב-Python שעונה על שאלות בעברית מתוך אוסף מסמכים מעורב.
+
+# המסמכים
+- PDF דיגיטליים (ספרים שנוצרו במחשב, עם text layer)
+- PDF סרוקים ותמונות (JPG/PNG) של מסמכים ישנים: דפוס ישן, כתב יד, כתב רש"י, טבלאות, דפים עם כמה טורים
+- שפות: בעיקר עברית, וגם יידיש, גרמנית ופולנית
+- היקף: מאות עמודים, ספר אחד יכול להגיע ל-100 עמודים ויותר
+
+# Stack
+- Python 3.12, LangChain 1.x (init_chat_model, init_embeddings), langchain-community (BM25Retriever), PyMuPDF, Streamlit
+- כל שם מודל מוגדר במשתנה סביבה בפורמט provider:model, בלי שמות מודלים בקוד
+- מצב RAG_FAKE=1 עם מודלים מדומים (FakeListChatModel, DeterministicFakeEmbedding), שמאפשר להריץ ולבדוק הכול בלי אף קריאת API
+
+# 1. קליטת מסמכים (Ingestion) — הסעיף הכי חשוב
+- ההחלטה נעשית לכל עמוד בנפרד, לא לכל קובץ.
+- שלב א, בחינם: שליפת ה-text layer עם PyMuPDF (page.get_text()).
+  - בדיקת איכות: לפחות 50 אותיות, ולפחות 50% מהתווים הגלויים הם אותיות. אחרת העמוד נחשב סרוק, או שהגופן שבור והטקסט יוצא ג'יבריש.
+  - תיקוני RTL: סוגריים ונקודות שיוצאים הפוכים, רווחים כפולים. לא להשתמש ב-sort=True, כי הוא הופך את סדר המילים בעברית.
+- שלב ב, בתשלום: רק עמוד בלי טקסט שמיש נשלח למודל Vision (VLM), ברזולוציה של 200 DPI, עם פרומפט:
+  - לשמור על השפה המקורית, לא לתרגם, לא לתקן כתיב ולא להשלים מילים
+  - לסמן [לא קריא] ו-[?מילה?]; עדיף לסמן מאשר לנחש
+  - בדף עם כמה טורים: לתעתק טור אחרי טור, ולא לערבב שורות בין טורים
+  - לזהות כתב רש"י ולתעתק אותו לאותיות רגילות
+  - בטבלה או ברשימה: שורה לכל רשומה
+- Cache לדיסק לכל עמוד: JSON עם text ו-method (text/vision). לא לשמור תעתוק ריק. טקסט מובנה גובר על תעתוק ישן של אותו עמוד.
+- דוח קליטה לכל קובץ: כמה עמודים יש בו, כמה נשלפו, כמה תועתקו, כמה נכשלו. אזהרה בולטת (לא הערה קטנה) כשקובץ נקלט רק חלקית.
+
+# 2. חלוקה לקטעים (Chunking)
+- RecursiveCharacterTextSplitter, בערך 1000–1500 תווים לקטע, חפיפה של כ-15%, מפרידים ["\n\n", "\n", ". ", " "]
+- metadata לכל קטע: source, page, method, chunk_id, ובמידת האפשר גם שנה, שפה וסוג מסמך
+- להסביר בקוד למה נבחר הגודל הזה, ולאפשר לשנות אותו במשתנה סביבה
+
+# 3. Embeddings ואינדקס
+- מודל embeddings רב-לשוני שתומך היטב בעברית. להשתמש ב-task type נפרד ל-query ול-document אם הספק תומך בזה.
+- שליחה בקבוצות (batches) מתחת למגבלת הבקשות לדקה. בשכבה החינמית של Google כל קטע נספר כבקשה: קבוצות של 90 עם המתנה של 62 שניות.
+- Cache לכל קטע לפי hash של הטקסט, ושמירה לדיסק אחרי כל קבוצה. שגיאה באמצע לא מוחקת עבודה, והבנייה הבאה ממשיכה מאותה נקודה.
+- האינדקס הווקטורי נשמר לדיסק עם מפתח hash(שם המודל + תוכן הקטעים). אינדקס BM25 נבנה במקביל.
+- סרגל התקדמות בממשק במהלך הבנייה.
+
+# 4. אחזור (Retrieval)
+- Hybrid search: חיפוש וקטורי ו-BM25, ממוזגים ב-RRF (k=60), עם משקל לכל אחד שניתן להגדרה
+- Tokenizer עברי ל-BM25: הסרת stopwords (מה, זה, של, את, על, הוא, היא...), נרמול תחיליות ו/ה/ב/ל/מ/ש/כ (תוך שמירה גם על המילה המקורית), ונרמול בסיסי של יחיד/רבים וכתיב מלא/חסר
+- Query rewriting: קריאת LLM זולה אחת לפני החיפוש, שמחזירה JSON עם:
+  - תת-שאלות, אם בהודעה יש יותר משאלה אחת (query decomposition)
+  - ניסוח שעומד בפני עצמו לשאלת המשך, על בסיס היסטוריית השיחה (query condensation)
+  - סוג השאלה: fact / understanding / summary
+  כל תת-שאלה מחפשת בנפרד.
+- אופציונלי: reranker (cross-encoder) שמדרג מחדש 20 קטעים ובוחר מהם 5
+
+# 5. יצירת התשובה (Generation) — שני מצבים
+- מצב "ארכיון" (עובדות: שמות, תאריכים, מספרים): top-k=5, פרומפט קשוח. עונים רק מהקטעים, מציינים (קובץ, עמוד) אחרי כל עובדה, לא מנחשים שמות, תאריכים או מספרים, וכותבים "לא נמצא במסמכים" אם המידע חסר.
+- מצב "הבנה" (הסבר, הגדרה, השוואה, סיכום): top-k=10–15. מותר לחבר בין כמה קטעים ולהסביר במילים פשוטות, עדיין עם ציטוט לכל טענה. אם חסר מידע, לומר מה כן נמצא.
+- בחירת המצב: אוטומטית לפי סוג השאלה מסעיף 4, עם אפשרות לבחירה ידנית בממשק.
+- בשאלה עם כמה חלקים: עונים על כל תת-שאלה בנפרד, ו"לא נמצא" נכתב רק על החלק החסר.
+- temperature=0
+
+# 6. הגנות עלות ומניעת לולאות אינסופיות
+- מחלקת Budget: מונה קריאות API עם תקרה קשיחה לכל הפעלה (RAG_MAX_API_CALLS). כל קריאה עוברת דרכה, כולל embeddings, query rewriting ותשובות.
+- תקרת עמודים לתעתוק בכל ריצה, עם הודעה בולטת ואפשרות להמשיך.
+- כל הלולאות רצות על רשימות סופיות. אין while True סביב קריאת API.
+- max_retries=1, ו-rate limiter בין קריאות. מודל מקומי (ollama) פטור מההמתנה.
+- שגיאה (למשל 429) עוצרת את הריצה. לא ממשיכים לעמוד הבא, ומציגים למשתמש מה נעצר ואיך להמשיך.
+- ב-Streamlit: אין קריאת API ברמה העליונה של הקובץ, רק בתוך לחיצה על כפתור. מודלים נטענים עם st.cache_resource.
+- לפני כל פעולה מציגים כמה קריאות API היא תשלח.
+
+# 7. הערכה (Evaluation)
+- קובץ eval_set.json, שבו לכל שאלה: question, expected, source, type (fact / understanding / multi / follow-up / not-found)
+- מדדים נפרדים: retrieval hit@k (האם הקובץ הנכון אוחזר) ו-answer correctness. לשאלות הבנה משתמשים ב-LLM-as-judge.
+- הסט חייב לכלול שאלות הבנה, שאלות כפולות, שאלות המשך ושאלות שאין להן תשובה במסמכים
+- פקודה אחת שמריצה את ההערכה ומדפיסה טבלה
+
+# 8. ממשק (Streamlit, RTL)
+- לשונית שאלות: היסטוריה, תגיות מקור לחיצות, והקטעים שאוחזרו (כדי לבדוק אם התשובה באמת כתובה בהם)
+- לשונית "בדיקת תעתוק": תמונת המקור ליד הטקסט, עם תגית שמראה אם הטקסט נשלף מהקובץ או תועתק במודל, וספירה של [לא קריא]
+- לשונית הערכה, ומונה קריאות API שתמיד מוצג
+- כיוון הטקסט נקבע אוטומטית (עברית או לטינית)
+
+# אופן העבודה
+1. לפני שכותבים קוד: הצג/י ארכיטקטורה, מבנה קבצים והחלטות עיקריות, וחכה/י לאישור.
+2. מבנה קבצים: config.py, ingest.py, chunking.py, index.py, retrieve.py, answer.py, budget.py, evaluate.py, app.py, tests/
+3. הערות בעברית, שמות משתנים ופונקציות באנגלית.
+4. בדיקות pytest לכל שלב, במצב FAKE (בלי עלות).
+5. README שמסביר כל החלטה ואת החלופות שנשקלו.
+6. אחרי כל שלב: הרצת בדיקות ודיווח מה עבד ומה לא.</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ meta prompt ============ -->
+<section id="meta">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>בקשה לצ'אט חדש: שיכין לך פרומפט מותאם</h2>
+      <p>אם ההגדרות בראיון יהיו שונות (מסמכים אחרים, ספק אחר, תקציב אחר), ההודעה הזו גורמת לצ'אט חדש לשאול אותך שאלות ולכתוב פרומפט מותאם במבנה שלמעלה.</p>
+    </div>
+    <div class="prompt-card">
+      <div class="prompt-bar">
+        <div class="meta"><b>מטא-פרומפט: "ראיין אותי וכתוב לי פרומפט"</b><small>להדביק בצ'אט חדש</small></div>
+        <button class="copy" type="button" data-target="p-meta" id="copy-meta">העתקה</button>
+      </div>
+<pre class="prompt" id="p-meta">את/ה מומחה/ית לכתיבת פרומפטים לעוזרי קוד (Claude Code, Cursor) ולמערכות RAG.
+
+המטרה: לכתוב לי פרומפט מפורט, שאדביק בעוזר קוד, כדי שיבנה מאפס מערכת RAG שעונה על שאלות מתוך מסמכים.
+
+שלב 1: לפני שכותבים, לשאול אותי בבת אחת עד 8 שאלות קצרות, עם אפשרויות לבחירה:
+- איזה סוג מסמכים (PDF דיגיטלי, סריקות, תמונות, כתב יד) ובאילו שפות?
+- כמה עמודים בערך, וכמה מסמכים חדשים מגיעים בחודש?
+- איזה סוג שאלות: עובדות מדויקות, הבנה והסבר, סיכומים, השוואות, שיחה רציפה?
+- ספק המודלים: Google, OpenAI, Anthropic, מקומי (ollama), או שילוב?
+- תקציב: שכבה חינמית, תקציב חודשי, או ללא הגבלה?
+- ממשק: Streamlit, API, צ'אט בוט, או שורת פקודה?
+- מה רמת הדיוק הנדרשת, והאם ציטוט מקור הוא חובה?
+- מסגרת קוד: LangChain, LlamaIndex, LangGraph (סוכן), או קוד נקי?
+
+שלב 2: לכתוב פרומפט שמכסה את כל הנושאים הבאים, עם החלטה מנומקת בכל אחד:
+1. קליטת מסמכים: קודם שליפת text layer בחינם (PyMuPDF), עמוד אחרי עמוד, עם בדיקת איכות. רק עמוד בלי טקסט עובר ל-OCR/VLM. פרומפט תעתוק שאוסר לתרגם ולתקן ומחייב סימון אי-ודאות. Cache לכל עמוד. דוח קליטה חלקית.
+2. Chunking: גודל, חפיפה ו-metadata, עם נימוק לפי סוג המסמכים.
+3. Embeddings: מודל רב-לשוני, שליחה בקבוצות מתחת למגבלות הספק, cache לכל קטע, ושמירה שמאפשרת להמשיך אחרי שגיאה.
+4. אחזור: חיפוש היברידי (וקטורי + BM25 + RRF), טיפול במורפולוגיה של השפה, query rewriting, decomposition, condensation לשאלות המשך, ו-reranker אופציונלי.
+5. תשובה: מצב "עובדות" קשוח ומצב "הבנה" שמסנתז, שניהם עם ציטוט; ניתוב אוטומטי ביניהם; תשובה נפרדת לכל תת-שאלה.
+6. הגנות עלות: Budget עם תקרה קשיחה, לולאות רק על רשימות סופיות, max_retries נמוך, rate limiter, עצירה בשגיאה, והצגת העלות לפני כל פעולה.
+7. הערכה: סט שאלות עם סוגים (עובדה, הבנה, כפולה, המשך, לא קיים), ומדידה נפרדת של retrieval ושל answer.
+8. אופן עבודה: קודם ארכיטקטורה ואישור, אחר כך קוד מחולק לקבצים, בדיקות במצב מדומה בלי עלות, ו-README עם נימוקים.
+
+דרישות לפרומפט שתכתוב/י:
+- בעברית, עם מונחים טכניים באנגלית
+- מחולק לסעיפים ממוספרים עם כותרות
+- דרישות מדידות ("קבוצות של 90", "לפחות 50 אותיות"), לא ניסוחים כלליים כמו "לטפל היטב ב..."
+- בסוף: רשימה של 5 דברים שהכי סביר שישתבשו במערכת כזו, ואיך הפרומפט מונע אותם
+
+אחרי הפרומפט, להוסיף בנפרד 10 שאלות שעשויות לשאול אותי בראיון עבודה על מערכת כזו, עם תשובה קצרה לכל אחת.</pre>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">נכתב על בסיס הקוד ב-<code>rag_skeleton.py</code> וב-<code>app.py</code>, אחרי התיקונים מ-17 בנובמבר 2026: שליפת טקסט חינמית ו-embeddings בקבוצות.</div>
+</footer>
+
+<script>
+document.querySelectorAll("button.copy").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    var pre = document.getElementById(btn.dataset.target);
+    var text = pre.innerText;
+    function done(ok) {
+      btn.textContent = ok ? "הועתק ✓" : "סומן, לחצי Ctrl+C";
+      btn.classList.toggle("ok", ok);
+      setTimeout(function () { btn.textContent = "העתקה"; btn.classList.remove("ok"); }, 2200);
+    }
+    function selectFallback() {
+      var r = document.createRange(); r.selectNodeContents(pre);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      done(false);
+    }
+    try {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, selectFallback);
+    } catch (e) { selectFallback(); }
+  });
+});
+</script>

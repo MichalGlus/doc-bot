@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG לחידושי תורה</title>
+<style>
+  :root {
+    --bg: #faf6ee; --card: #ffffff; --ink: #2b2620; --soft: #6b6257;
+    --line: #e2d9c8; --accent: #8a4b1f; --accent-bg: #f3e6d6;
+    --code-bg: #f4efe4; --warn-bg: #fdf0d5; --warn-line: #d9a441;
+    --good: #2f6b3a; --good-bg: #e3efe2; --bad: #a23b2c; --bad-bg: #f6e0da;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1814; --card: #24201b; --ink: #ece5d8; --soft: #a99f90;
+      --line: #3a342c; --accent: #e0a36a; --accent-bg: #33291f;
+      --code-bg: #2b2620; --warn-bg: #3a2f18; --warn-line: #b98a2e;
+      --good: #7fc48b; --good-bg: #1f2e21; --bad: #e58a7b; --bad-bg: #3a221d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif;
+    font-size: 17px; line-height: 1.7;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 16px 16px 80px; }
+  h1 { font-size: 30px; line-height: 1.3; margin: 28px 0 6px; }
+  h2 {
+    font-size: 23px; margin: 46px 0 10px; padding-bottom: 6px;
+    border-bottom: 2px solid var(--accent); color: var(--accent);
+  }
+  h3 { font-size: 18px; margin: 26px 0 6px; }
+  .lead { color: var(--soft); margin-top: 0; }
+  code {
+    direction: ltr; unicode-bidi: isolate; font-family: Consolas, "Courier New", monospace;
+    font-size: 0.9em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px;
+  }
+  pre {
+    direction: rtl; text-align: right; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 15px; line-height: 1.55;
+    font-family: "David", "Frank Ruhl Libre", serif; white-space: pre-wrap;
+  }
+  pre.ltr { direction: ltr; text-align: left; font-family: Consolas, "Courier New", monospace; font-size: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; margin: 14px 0; }
+  .callout { background: var(--warn-bg); border-inline-start: 4px solid var(--warn-line); padding: 12px 16px; border-radius: 6px; margin: 16px 0; }
+  .callout.good { background: var(--good-bg); border-color: var(--good); }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; background: var(--card); font-size: 15.5px; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: right; vertical-align: top; }
+  th { background: var(--accent-bg); }
+  .tablewrap { overflow-x: auto; }
+  nav.toc { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 18px; }
+  nav.toc ol { margin: 6px 0; padding-inline-start: 22px; }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  .step { display: inline-block; background: var(--accent); color: var(--bg); border-radius: 50%;
+          width: 28px; height: 28px; text-align: center; line-height: 28px; font-weight: 700; margin-inline-end: 8px; font-size: 15px; }
+  .bad { color: var(--bad); } .good { color: var(--good); }
+  ul li, ol li { margin: 4px 0; }
+  .quote { font-family: "David", "Frank Ruhl Libre", serif; font-size: 1.05em; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>RAG לחידושי תורה</h1>
+<p class="lead">אבחון: למה הספר "בעלי הנפש" לא נענה כראוי, ותוכנית מימוש לקורפוס תורני (PDF ו-DOC מוקלדים) בתוך מנוע doc-agent הקיים.</p>
+
+<nav class="toc">
+  <b>תוכן</b>
+  <ol>
+    <li><a href="#diag">מה מצאתי: אבחון</a></li>
+    <li><a href="#arch">בוט חדש? ההחלטה הארכיטקטונית</a></li>
+    <li><a href="#impl">תוכנית המימוש: 6 שלבים</a></li>
+    <li><a href="#order">סדר עבודה מומלץ</a></li>
+    <li><a href="#interview">איך לספר את זה בראיון</a></li>
+  </ol>
+</nav>
+
+<h2 id="diag">1. מה מצאתי: אבחון</h2>
+<p>בדקתי את הטקסט של "ספר בעלי הנפש" כפי שהוא שמור באינדקס (עמודים 20 ו-40). <b>הבעיה לא בבוט אלא בטקסט שנכנס אליו.</b></p>
+
+<h3>א. שליפת הטקסט מה-PDF שבורה, למרות שהיא "קריאה"</h3>
+<ul>
+  <li><b>העמודות מתערבבות.</b> עמוד 40 הוא דו-טורי, ו-<code>get_text()</code> קורא אותו בסדר שגוי, כך שהטקסט מפורק לשברי מילים:</li>
+</ul>
+<pre>ארבע ראיות מעשרים
+לעשרים
+ותשעה
+ותשעה, קבעה לה וסת
+עשרין
+להפלגת</pre>
+<ul>
+  <li><b>כותרות עמוד באמצע הטקסט:</b> "בעלי", "הנפש", "סימן א", אות העמוד.</li>
+  <li><b>מספרי הערות בתוך המשפט:</b> "מו", "מז", "מח" חותכים את רצף הסברא.</li>
+  <li><b>ההערות (הערות וציונים) מעורבבות עם גוף הטקסט</b>, כאילו הן המשך שלו.</li>
+  <li><b>פיסוק הפוך:</b> נקודה בתחילת שורה, כמו <span class="quote">".חוששת לאותו יום"</span>.</li>
+</ul>
+<div class="callout">התוצאה: ה-embedding של קטע כזה הוא "רעש", ולכן הוא לא נמצא כששואלים עליו.</div>
+
+<h3>ב. הספר חוזר בתוצאות של שאלות אחרות</h3>
+<p>ב-RRF <b>תמיד</b> חוזרים 5 קטעים, גם כשאף אחד מהם לא רלוונטי. אין סף ציון. 79 העמודים של הספר הם רוב האינדקס, ולכן הם "ממלאים" את התוצאות.</p>
+
+<h3>ג. הפרומפט מתאים לארכיון ולא לתורה</h3>
+<p>"רק עובדות, אחרת לא נמצא" עם 5 קטעים של 800 תווים נכשל על שאלות כמו <span class="quote">"מה ההבדל בין וסת קבוע לשאינו קבוע?"</span>.</p>
+
+<h3>ד. קובצי DOC/DOCX בכלל לא נטענים</h3>
+<p><code>SUFFIXES</code> ב-<code>rag_skeleton.py</code> כולל רק <code>.pdf</code> ותמונות.</p>
+
+<h2 id="arch">2. בוט חדש? ההחלטה הארכיטקטונית</h2>
+<div class="callout good"><b>לא בוט חדש, אלא אותו מנוע עם "קורפוס" נפרד:</b> אינדקס נפרד ופרופיל הגדרות לכל סוג מסמכים. כך מקבלים הפרדה בלי לשכפל קוד.</div>
+
+<div class="tablewrap">
+<table>
+  <tr><th></th><th>ארכיון</th><th>חידושי תורה</th></tr>
+  <tr><td><b>טעינה</b></td><td>OCR / vision</td><td>docx + שכבת טקסט של PDF לפי מבנה</td></tr>
+  <tr><td><b>חלוקה</b></td><td>800 תווים</td><td>לפי סימן / סעיף / דיבור המתחיל</td></tr>
+  <tr><td><b>מספר קטעים לתשובה (k)</b></td><td>5</td><td>10–15, ומחזירים סעיף שלם</td></tr>
+  <tr><td><b>פרומפט</b></td><td>קפדני: עובדה + ציטוט</td><td>הסבר שיטה + ציטוט לשון המקור</td></tr>
+  <tr><td><b>נרמול</b></td><td>תעתיקי שמות</td><td>תחיליות, כתיב מלא/חסר, ראשי תיבות</td></tr>
+</table>
+</div>
+<p><b>הבחירה ביניהם:</b> בורר בממשק ("ארכיון" / "בית מדרש"), או סינון לפי <code>metadata["corpus"]</code>.</p>
+
+<h2 id="impl">3. תוכנית המימוש: 6 שלבים</h2>
+
+<div class="card">
+<h3><span class="step">1</span>טעינה ששומרת על מבנה (הכי חשוב)</h3>
+<ul>
+  <li><b>DOCX:</b> עם <code>python-docx</code>, פסקה אחרי פסקה. סגנונות ה-Heading נותנים את המבנה (שער / סימן / סעיף) בחינם.</li>
+  <li><b>DOC ישן:</b> ממירים קודם ל-docx:
+    <pre class="ltr">soffice --headless --convert-to docx file.doc</pre></li>
+  <li><b>PDF:</b>
+    <ul>
+      <li><code>page.get_text("blocks", sort=True)</code> במקום <code>get_text()</code>.</li>
+      <li>זיהוי טורים לפי קואורדינטת x של כל בלוק.</li>
+      <li>השמטת כותרות עליונות ותחתונות לפי מיקום (y בשוליים).</li>
+      <li><b>הפרדת הערות לפי גודל גופן:</b> <code>get_text("dict")</code> נותן <code>size</code> לכל span. כל הערה נשמרת כ-chunk נפרד עם <code>type="הערה"</code>, ומקושרת למספר שלה.</li>
+    </ul>
+  </li>
+  <li>לפני שממשיכים, תמיד בודקים בעין בלשונית "בדיקת תעתוק".</li>
+</ul>
+</div>
+
+<div class="card">
+<h3><span class="step">2</span>Chunking לפי מבנה + "פירורי לחם"</h3>
+<ul>
+  <li>גבולות טבעיים: סימן, סעיף, ובחידושים <b>דיבור המתחיל</b>. לא לחתוך באמצע סברא.</li>
+  <li>להוסיף לכל chunk כותרת הקשר בתחילת הטקסט:
+    <pre>ספר בעלי הנפש &gt; שער תיקון הווסתות &gt; סימן ב &gt; סעיף י</pre>
+    זה משפר מאוד את האחזור.</li>
+  <li><b>Parent-child:</b> מחפשים על קטעים קטנים, ושולחים למודל את הסעיף השלם.</li>
+  <li><b>מטא-דאטה:</b> ספר, מחבר, סימן, סעיף, עמוד, סוג (גוף / הערה), קורפוס.</li>
+</ul>
+</div>
+
+<div class="card">
+<h3><span class="step">3</span>נרמול עברית רבנית ל-BM25</h3>
+<ul>
+  <li><b>תחיליות:</b> "והוסת", "לוסת", "בוסת" לעומת "וסת". נדרש stemming קל שמוריד ו/ה/ב/ל/מ/ש/כ, או BM25 על character n-grams.</li>
+  <li><b>כתיב מלא וחסר:</b> ווסת / וסת.</li>
+  <li><b>נרמול גרשיים:</b> ״ ' " לסימן אחד.</li>
+  <li><b>הסרת ניקוד.</b></li>
+  <li><b>ראשי תיבות:</b> מילון קטן (ראב"ד, רז"ה, צ"ב, אע"פ). שומרים גם את הצורה המקורית וגם את הפתוחה.</li>
+</ul>
+</div>
+
+<div class="card">
+<h3><span class="step">4</span>גישור בין השאלה לשפת הספר</h3>
+<p>המשתמש שואל בעברית מודרנית, והספר כתוב בלשון רבנית וארמית (<span class="quote">"אורח בזמנו בא", "דקיימי אהדדי"</span>).</p>
+<ul>
+  <li><b>Query rewriting:</b> ה-LLM מנסח את השאלה מחדש במונחים למדניים לפני החיפוש.</li>
+  <li><b>HyDE:</b> ה-LLM כותב תשובה היפותטית בסגנון הספר, ומחפשים לפיה.</li>
+  <li><b>Reranker:</b> מודל רב-לשוני, או LLM שמדרג 20 קטעים ומשאיר את הטובים.</li>
+  <li><b>סף ציון:</b> כדי לא להחזיר קטעים לא רלוונטיים "רק כי צריך 5".</li>
+</ul>
+</div>
+
+<div class="card">
+<h3><span class="step">5</span>פרומפט תשובה ל"בית מדרש"</h3>
+<ul>
+  <li>להסביר את השיטה, ולצטט <b>לשון המקור</b> במירכאות עם (ספר, סימן, סעיף).</li>
+  <li>להפריד בין "מה כתוב" ל"ההסבר שלי".</li>
+  <li>לומר במפורש כשמשהו לא מופיע בטקסט, ולא להשלים מהידע הכללי של המודל.</li>
+  <li>לא לפסוק הלכה.</li>
+</ul>
+</div>
+
+<div class="card">
+<h3><span class="step">6</span>הערכה</h3>
+<p>15–20 שאלות עם הסימן או הסעיף הצפוי, בשלושה סוגים:</p>
+<div class="tablewrap">
+<table>
+  <tr><th>סוג</th><th>דוגמה</th></tr>
+  <tr><td>איתור</td><td>"איפה הראב"ד דן ב..."</td></tr>
+  <tr><td>מושגיות</td><td>"מה ההבדל בין וסת קבוע לשאינו קבוע?"</td></tr>
+  <tr><td>השוואה</td><td>"במה חולק הרז"ה..."</td></tr>
+</table>
+</div>
+<p>מודדים <b>recall@k ברמת סימן</b>, לפני ואחרי כל שינוי.</p>
+</div>
+
+<h2 id="order">4. סדר עבודה מומלץ</h2>
+<ol>
+  <li>כותבים 15 שאלות eval על הספר ומריצים כבסיס להשוואה.</li>
+  <li>טעינת PDF לפי מבנה (טורים, כותרות, הערות) + תמיכה ב-DOCX/DOC.</li>
+  <li>חלוקה לפי סימן וסעיף עם פירורי לחם, ומריצים eval.</li>
+  <li>פרופיל קורפוס נפרד + פרומפט "בית מדרש" + k גדול יותר, ומריצים eval.</li>
+  <li>נרמול ל-BM25 + query rewriting, ומריצים eval.</li>
+  <li>Reranker + סף ציון, ומריצים eval.</li>
+</ol>
+<div class="callout">כלל: שינוי אחד בכל פעם, ומספר לפני ואחרי. כך יודעים מה באמת עזר.</div>
+
+<h2 id="interview">5. איך לספר את זה בראיון</h2>
+<div class="card">
+<p class="quote">"הטקסט נשלף בחינם מה-PDF ונראה תקין, אבל בדקתי ומצאתי שהטורים מתערבבים וההערות נכנסות לגוף הטקסט. לכן עברתי לחילוץ לפי מבנה ולחלוקה לפי סימן וסעיף, ומדדתי את השיפור ב-recall."</p>
+</div>
+<p>המסר: <b>טקסט "קריא" הוא לא טקסט נכון.</b> זה בדיוק אותו אתגר שיש במסמכים היסטוריים, רק בלי OCR.</p>
+
+</main>
+</body>
+</html>

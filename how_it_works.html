@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>איך ה-RAG עובד · How the RAG works</title>
+<style>
+  :root {
+    --bg: #faf6ee; --card: #ffffff; --ink: #2b2620; --soft: #6b6257;
+    --line: #e2d9c8; --accent: #8a4b1f; --accent-bg: #f3e6d6;
+    --code-bg: #f4efe4; --warn-bg: #fdf0d5; --warn-line: #d9a441;
+    --good: #2f6b3a; --bad: #a23b2c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1814; --card: #24201b; --ink: #ece5d8; --soft: #a99f90;
+      --line: #3a342c; --accent: #e0a36a; --accent-bg: #33291f;
+      --code-bg: #2b2620; --warn-bg: #3a2f18; --warn-line: #b98a2e;
+      --good: #7fc48b; --bad: #e58a7b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif;
+    font-size: 17px; line-height: 1.7;
+  }
+  body[data-lang="he"] .en, body[data-lang="en"] .he { display: none !important; }
+  main { max-width: 900px; margin: 0 auto; padding: 16px 16px 80px; }
+  header.top {
+    position: sticky; top: 0; z-index: 5; background: var(--bg);
+    border-bottom: 1px solid var(--line); padding: 10px 16px;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  }
+  header.top strong { color: var(--accent); }
+  .lang button {
+    font: inherit; font-size: 15px; padding: 5px 14px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 6px;
+  }
+  body[data-lang="he"] #btn-he, body[data-lang="en"] #btn-en {
+    background: var(--accent); color: var(--bg); border-color: var(--accent);
+  }
+  h1 { font-size: 30px; line-height: 1.3; margin: 28px 0 6px; }
+  h2 {
+    font-size: 23px; margin: 46px 0 10px; padding-bottom: 6px;
+    border-bottom: 2px solid var(--accent); color: var(--accent);
+  }
+  h3 { font-size: 18px; margin: 26px 0 6px; }
+  p { margin: 10px 0; }
+  .lead { color: var(--soft); margin-top: 0; }
+  code {
+    direction: ltr; unicode-bidi: isolate; font-family: Consolas, "Courier New", monospace;
+    font-size: 0.9em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px;
+  }
+  pre {
+    direction: ltr; text-align: left; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 14px; line-height: 1.5;
+    font-family: Consolas, "Courier New", monospace; margin: 12px 0;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .box { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; margin: 14px 0; }
+  .warn { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 10px; padding: 14px 18px; margin: 14px 0; }
+  .tablewrap { overflow-x: auto; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; background: var(--card); font-size: 15.5px; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; vertical-align: top; text-align: start; }
+  th { background: var(--accent-bg); }
+  .num { direction: ltr; unicode-bidi: isolate; font-family: Consolas, monospace; }
+  .flow { display: grid; gap: 8px; margin: 14px 0; }
+  .phase { font-weight: 600; color: var(--soft); margin-top: 10px; }
+  .step {
+    background: var(--card); border: 1px solid var(--line); border-inline-start: 5px solid var(--accent);
+    border-radius: 8px; padding: 10px 14px;
+  }
+  .step b { color: var(--accent); }
+  .step small { color: var(--soft); display: block; }
+  .arrow { text-align: center; color: var(--soft); line-height: 1; }
+  .good { color: var(--good); font-weight: 600; }
+  .bad { color: var(--bad); font-weight: 600; }
+  ul, ol { padding-inline-start: 24px; }
+  li { margin: 5px 0; }
+  .toc a { color: var(--accent); }
+</style>
+</head>
+<body data-lang="he">
+
+<header class="top">
+  <strong><span class="he">איך ה-RAG עובד</span><span class="en">How the RAG works</span></strong>
+  <div class="lang">
+    <button id="btn-he" onclick="setLang('he')">עברית</button>
+    <button id="btn-en" onclick="setLang('en')">English</button>
+  </div>
+</header>
+
+<main>
+
+<h1>
+  <span class="he">הפרויקט שלך, מקצה לקצה</span>
+  <span class="en">Your project, end to end</span>
+</h1>
+<p class="lead he">מה קורה מהרגע שיש תמונה של מסמך ועד שמופיעה תשובה, אילו מודלים עובדים, איפה הכול נשמר, ואיך לדעת אם תשובה נכונה. כל המספרים והדוגמאות כאן נלקחו מהקבצים שבתיקייה <code>doc-agent</code>.</p>
+<p class="lead en">What happens from a scanned page to an answer, which models do the work, where everything is stored, and how to tell whether an answer is right. Every number and example here comes from the files in your <code>doc-agent</code> folder.</p>
+
+<div class="box toc">
+  <span class="he">
+    <a href="#q1">1. למה קיבלתי קטע בלי השם?</a> ·
+    <a href="#q2">2. איך לדעת שתשובה טובה?</a> ·
+    <a href="#flow">3. הזרימה</a> ·
+    <a href="#models">4. המודלים</a> ·
+    <a href="#steps">5. כל שלב עם קוד</a> ·
+    <a href="#where">6. איפה הכול נשמר</a> ·
+    <a href="#db">7. יש Vector DB?</a> ·
+    <a href="#cost">8. הגנות עלות</a>
+  </span>
+  <span class="en">
+    <a href="#q1">1. Why a chunk without the name?</a> ·
+    <a href="#q2">2. How to know an answer is good?</a> ·
+    <a href="#flow">3. The flow</a> ·
+    <a href="#models">4. The models</a> ·
+    <a href="#steps">5. Each step with code</a> ·
+    <a href="#where">6. Where things are stored</a> ·
+    <a href="#db">7. Is there a vector DB?</a> ·
+    <a href="#cost">8. Cost guards</a>
+  </span>
+</div>
+
+<!-- ================================================================ 1 -->
+<h2 id="q1">
+  <span class="he">1. למה קיבלתי קטע שהשם בכלל לא מופיע בו?</span>
+  <span class="en">1. Why did I get a chunk that does not contain the name?</span>
+</h2>
+
+<div class="he">
+<p><b>כי החיפוש לא מסנן, הוא מדרג.</b> הוא לא שואל "באילו קטעים מופיע השם?" אלא "מי 5 הקטעים הכי קרובים לשאלה?", ותמיד מחזיר 5, גם אם רק אחד מהם באמת רלוונטי. אין בקוד סף מינימלי של התאמה.</p>
+<p>ואצלך זה בולט במיוחד: <b>בכל המאגר יש רק 6 קטעים</b>. כל עמוד קצר מ-800 תווים, אז כל עמוד הוא קטע אחד. לכן כל שאלה, לא משנה מה תשאלי, מחזירה 5 מתוך 6. כמעט הכול חוזר תמיד.</p>
+<p>יש שני חיפושים שרצים במקביל, והם מתנהגים אחרת:</p>
+<ul>
+  <li><b>חיפוש וקטורי (לפי משמעות):</b> קטע על משפחה מלודז' עם שנות לידה "קרוב" לשאלה על שנת לידה, גם בלי השם.</li>
+  <li><b>חיפוש BM25 (לפי מילים מדויקות):</b> מחזיר את הרשימה שלו גם כשהציון של קטע הוא 0.</li>
+</ul>
+<p>זה לא באג. הרעיון הוא להביא למודל קצת יותר מדי, ולתת לו הוראה לענות רק ממה שכתוב ולהתעלם מהשאר.</p>
+</div>
+
+<div class="en">
+<p><b>Because search does not filter, it ranks.</b> It does not ask "which chunks contain the name?" but "which 5 chunks are closest to the question?", and it always returns 5, even when only one is really relevant. The code has no minimum-match threshold.</p>
+<p>In your case this is extreme: <b>the whole corpus is only 6 chunks</b>. Every page is shorter than 800 characters, so every page is exactly one chunk. So any question at all returns 5 of the 6. Almost everything comes back every time.</p>
+<p>Two searches run side by side, and they behave differently:</p>
+<ul>
+  <li><b>Vector search (by meaning):</b> a chunk about a family from Lodz with birth years is "close" to a question about a birth year, even without the name.</li>
+  <li><b>BM25 search (by exact words):</b> returns its list even when a chunk's score is 0.</li>
+</ul>
+<p>This is not a bug. The idea is to bring the model slightly too much and instruct it to answer only from what is written and ignore the rest.</p>
+</div>
+
+<h3>
+  <span class="he">ההוכחה, מהקבצים שלך</span>
+  <span class="en">The evidence, from your files</span>
+</h3>
+<p class="he">הרצתי את חיפוש המילים (BM25) על השאלה "מתי נולד חיים שפירא?" מול 6 הקטעים שלך. זה חיפוש מקומי, בלי API:</p>
+<p class="en">I ran the keyword search (BM25) for "מתי נולד חיים שפירא?" ("when was Chaim Shapira born?") against your 6 chunks. This search is local, no API:</p>
+
+<div class="tablewrap"><table>
+  <tr>
+    <th><span class="he">קטע</span><span class="en">Chunk</span></th>
+    <th><span class="he">ציון BM25</span><span class="en">BM25 score</span></th>
+    <th><span class="he">למה</span><span class="en">Why</span></th>
+  </tr>
+  <tr><td><code>residents_list_1941.png</code></td><td class="num">1.254</td>
+    <td><span class="he">המילה "שפירא" מופיעה (שפירא חנה)</span><span class="en">contains the word "שפירא" (Shapira Chana)</span></td></tr>
+  <tr><td><code>bescheinigung_1942.jpg</code></td><td class="num">0.000</td><td rowspan="5">
+    <span class="he">אין התאמת מילים. ובכל זאת כל החמישה נכנסים לרשימה, ו-4 מהם חוזרים אלייך.</span>
+    <span class="en">No word match. All five still enter the list, and 4 of them come back to you.</span></td></tr>
+  <tr><td><code>karta_1945.png</code></td><td class="num">0.000</td></tr>
+  <tr><td><code>letter_lodz_1939.jpg</code></td><td class="num">0.000</td></tr>
+  <tr><td><code>testimony_318.pdf</code> p1</td><td class="num">0.000</td></tr>
+  <tr><td><code>testimony_318.pdf</code> p2</td><td class="num">0.000</td></tr>
+</table></div>
+
+<div class="warn">
+  <p class="he"><b>שימי לב: במסמכים שלך אין אדם בשם חיים שפירא.</b> יש <b>חיים וינברג</b> (נולד 1908) ויש <b>חנה שפירא</b> (נולדה 1903), שניהם ברשימת הדיירים. לא ראיתי איזו תשובה קיבלת. אם קיבלת שנה כלשהי, זו תשובה שנראית טובה אבל שגויה: המודל חיבר שם פרטי של אדם אחד עם שם משפחה של אחר. התשובה הנכונה היא "לא נמצא במסמכים". אם התכוונת לחיים וינברג, התשובה 1908 נכונה.</p>
+  <p class="en"><b>Note: there is no person named Chaim Shapira in your documents.</b> There is <b>Chaim Weinberg</b> (born 1908) and <b>Chana Shapira</b> (born 1903), both in the residents list. I did not see which answer you got. If you got a year, that is an answer that looks good but is wrong: the model joined one person's first name with another's surname. The right answer is "לא נמצא במסמכים" (not found in the documents). If you meant Chaim Weinberg, then 1908 is correct.</p>
+</div>
+
+<!-- ================================================================ 2 -->
+<h2 id="q2">
+  <span class="he">2. איך לדעת שתשובה באמת טובה?</span>
+  <span class="en">2. How do I know an answer is really good?</span>
+</h2>
+
+<div class="he">
+<p>תשובה שנשמעת בטוחה איננה הוכחה. יש שלושה מקומות שבהם דברים משתבשים, וכל אחד נבדק אחרת:</p>
+<ol>
+  <li><b>התעתוק שגוי.</b> המודל קרא את התמונה לא נכון. התשובה תצטט נאמנה טקסט שגוי.<br>בדיקה: הלשונית "בדיקת תעתוק" בממשק, תמונה מול טקסט.</li>
+  <li><b>האחזור פספס.</b> הקטע הנכון לא הגיע למודל.<br>בדיקה: לפתוח את "קטעים שאוחזרו" ולראות אם המסמך הנכון שם.</li>
+  <li><b>המודל המציא.</b> הקטע הנכון הגיע, אבל התשובה לא כתובה בו.<br>בדיקה: למצוא בקטעים את המשפט המדויק שעליו התשובה נשענת. אין משפט כזה? התשובה לא אמינה.</li>
+</ol>
+<p><b>שלוש בדיקות שכדאי לעשות עכשיו:</b></p>
+<ul>
+  <li>לשאול על משהו שלא קיים (כמו חיים שפירא). תשובה טובה: "לא נמצא במסמכים".</li>
+  <li>להריץ את ההערכה (הלשונית "הערכה", או הריצה בשורת הפקודה). יש שם 8 שאלות שהתשובה עליהן ידועה מראש.</li>
+  <li>להוסיף ל-<code>eval_set.json</code> שאלות משלך, כולל שאלות "מלכודת" בלי תשובה.</li>
+</ul>
+</div>
+
+<div class="en">
+<p>An answer that sounds confident is not evidence. Things go wrong in three places, and each is checked differently:</p>
+<ol>
+  <li><b>The transcript is wrong.</b> The model misread the image. The answer will faithfully quote wrong text.<br>Check: the "בדיקת תעתוק" (transcript check) tab, image beside text.</li>
+  <li><b>Retrieval missed.</b> The right chunk never reached the model.<br>Check: open "retrieved chunks" and see whether the right document is there.</li>
+  <li><b>The model made it up.</b> The right chunk arrived, but the answer is not written in it.<br>Check: find the exact sentence in the chunks that the answer rests on. No such sentence? Do not trust the answer.</li>
+</ol>
+<p><b>Three checks worth doing now:</b></p>
+<ul>
+  <li>Ask about something that does not exist (like Chaim Shapira). A good answer: "לא נמצא במסמכים".</li>
+  <li>Run the evaluation (the "הערכה" tab, or the command-line run). It has 8 questions with known answers.</li>
+  <li>Add your own questions to <code>eval_set.json</code>, including "trap" questions with no answer.</li>
+</ul>
+</div>
+
+<h3>
+  <span class="he">שגיאות תעתוק אמיתיות שמצאתי אצלך</span>
+  <span class="en">Real transcription errors I found in your files</span>
+</h3>
+<p class="he">השוויתי את התעתוקים השמורים ב-<code>transcripts/</code> לטקסט המקורי שממנו נוצרו המסמכים (<code>make_samples.py</code>). מצאתי 13 שגיאות. הנה חלק:</p>
+<p class="en">I compared the transcripts saved in <code>transcripts/</code> with the original text the documents were generated from (<code>make_samples.py</code>). I found 13 errors. Some of them:</p>
+
+<div class="tablewrap"><table>
+  <tr>
+    <th><span class="he">מסמך</span><span class="en">Document</span></th>
+    <th><span class="he">במקור</span><span class="en">Original</span></th>
+    <th><span class="he">בתעתוק</span><span class="en">Transcript</span></th>
+    <th><span class="he">מה זה שובר</span><span class="en">What it breaks</span></th>
+  </tr>
+  <tr><td><code>testimony_318.pdf</code> p2</td><td dir="rtl">עובדת כתופרת</td><td dir="rtl" class="bad">עובדת כחוֹפֶרת</td>
+    <td><span class="he">המשמעות משתנה. שאלה על המקצוע שלה תקבל תשובה שגויה.</span><span class="en">The meaning changes (seamstress became "digger"). A question about her job gets a wrong answer.</span></td></tr>
+  <tr><td><code>residents_list_1941.png</code></td><td dir="rtl">פיוטרקובסקה</td><td dir="rtl" class="bad">פיטרקו בסקה</td>
+    <td><span class="he">חיפוש מילים לפי שם הרחוב לא ימצא את השורה.</span><span class="en">Keyword search for the street name will not find the row.</span></td></tr>
+  <tr><td><code>residents_list_1941.png</code></td><td dir="rtl">ברזינסקה</td><td dir="rtl" class="bad">ברדינסקה</td>
+    <td><span class="he">כתובת שגויה בתשובה.</span><span class="en">Wrong address in the answer.</span></td></tr>
+  <tr><td><code>letter_lodz_1939.jpg</code></td><td dir="rtl">מפיוטרקוב</td><td dir="rtl" class="bad">מפיوترקוב</td>
+    <td><span class="he">אותיות ערביות נכנסו באמצע מילה עברית.</span><span class="en">Arabic letters slipped into a Hebrew word.</span></td></tr>
+  <tr><td><code>letter_lodz_1939.jpg</code></td><td dir="rtl">ויינברג</td><td dir="rtl" class="bad">ווייןברג</td>
+    <td><span class="he">שם המשפחה נכתב אחרת, אז חיפוש מילים לא יתאים.</span><span class="en">The surname is spelled differently, so keyword search will not match.</span></td></tr>
+  <tr><td><code>testimony_318.pdf</code> p1</td><td dir="rtl">תפרתי מדים</td><td dir="rtl" class="bad">תפרתי מדיס</td>
+    <td><span class="he">מילה לא קיימת.</span><span class="en">Not a real word.</span></td></tr>
+</table></div>
+
+<p class="he">המודל לא סימן אף אחת מהן ב-<code>[?מילה?]</code>, למרות שההוראה מבקשת לסמן ספק. כלומר ספירת סימוני אי-הוודאות בממשק לא מגלה שגיאות כאלה. רק השוואה לתמונה מגלה.</p>
+<p class="en">The model marked none of them with <code>[?word?]</code>, although the prompt asks it to mark doubt. So the uncertainty counter in the UI does not reveal errors like these. Only comparing against the image does.</p>
+
+<h3>
+  <span class="he">מה ההערכה מודדת, ומה לא</span>
+  <span class="en">What the evaluation measures, and what it does not</span>
+</h3>
+<div class="he">
+<p>ההערכה מחזירה שני מספרים נפרדים, כדי לדעת איפה הבעיה:</p>
+<ul>
+  <li><b>אחזור:</b> האם המסמך הנכון היה בין 5 הקטעים.</li>
+  <li><b>תשובה:</b> האם המילה הצפויה מופיעה בתשובה.</li>
+</ul>
+<p>שתי מגבלות שחשוב להכיר:</p>
+<ul>
+  <li>עם 6 קטעים ו-5 שחוזרים, ציון האחזור כמעט מובטח. הוא לא באמת בוחן את החיפוש. כדי לבחון אותו, שני בקוד את <code>TOP_K = 5</code> ל-<code>TOP_K = 2</code> והריצי שוב.</li>
+  <li>בדיקת התשובה היא רק "האם המחרוזת מופיעה". אם התשובה הצפויה היא <code>1925</code> והמודל כתב "לא 1925 אלא 1926", זה ייספר כהצלחה.</li>
+</ul>
+</div>
+<div class="en">
+<p>The evaluation returns two separate numbers, so you know where the problem is:</p>
+<ul>
+  <li><b>Retrieval:</b> was the right document among the 5 chunks.</li>
+  <li><b>Answer:</b> does the expected word appear in the answer.</li>
+</ul>
+<p>Two limits worth knowing:</p>
+<ul>
+  <li>With 6 chunks and 5 returned, the retrieval score is almost guaranteed. It does not really test the search. To test it, change <code>TOP_K = 5</code> to <code>TOP_K = 2</code> in the code and run again.</li>
+  <li>The answer check is only "does the string appear". If the expected answer is <code>1925</code> and the model wrote "not 1925 but 1926", it counts as a success.</li>
+</ul>
+</div>
+
+<pre><code>rows.append({
+    "question": case["question"],
+    "retrieved": any(h.metadata["source"] == case["source"] for h in hits),
+    "answered": case["expected"] in reply,
+    "reply": reply,
+})</code></pre>
+
+<!-- ================================================================ 3 -->
+<h2 id="flow">
+  <span class="he">3. הזרימה</span>
+  <span class="en">3. The flow</span>
+</h2>
+<p class="he">יש שני שלבים: <b>בנייה</b>, שקורית פעם אחת לכל מסמך, ו<b>שאלה</b>, שקורית בכל שאלה.</p>
+<p class="en">There are two phases: <b>build</b>, which happens once per document, and <b>ask</b>, which happens for every question.</p>
+
+<div class="flow">
+  <div class="phase"><span class="he">בנייה (פעם אחת)</span><span class="en">Build (once)</span></div>
+  <div class="step"><b>1 · <span class="he">תעתוק</span><span class="en">Transcription</span></b>
+    <span class="he">תמונת עמוד נשלחת למודל ראייה, וחוזר טקסט.</span>
+    <span class="en">A page image goes to a vision model, text comes back.</span>
+    <small><span class="he">קריאת API אחת לעמוד · נשמר ב-<code>transcripts/</code></span><span class="en">One API call per page · saved in <code>transcripts/</code></span></small></div>
+  <div class="arrow">↓</div>
+  <div class="step"><b>2 · Chunking</b>
+    <span class="he">הטקסט נחתך לקטעים של עד 800 תווים. כל קטע זוכר קובץ ועמוד.</span>
+    <span class="en">The text is cut into chunks of up to 800 characters. Each chunk remembers its file and page.</span>
+    <small><span class="he">מקומי, בלי API</span><span class="en">Local, no API</span></small></div>
+  <div class="arrow">↓</div>
+  <div class="step"><b>3 · <span class="he">אינדקס</span><span class="en">Index</span></b>
+    <span class="he">כל קטע הופך לווקטור של 3072 מספרים (embedding), ובמקביל נבנה אינדקס מילים (BM25).</span>
+    <span class="en">Each chunk becomes a vector of 3072 numbers (an embedding), and a keyword index (BM25) is built alongside.</span>
+    <small><span class="he">רק קטעים חדשים נשלחים ל-API · כל וקטור נשמר ב-<code>transcripts/embcache_*.json</code></span><span class="en">Only new chunks go to the API · each vector is saved in <code>transcripts/embcache_*.json</code></span></small></div>
+
+  <div class="phase"><span class="he">שאלה (בכל פעם)</span><span class="en">Ask (every time)</span></div>
+  <div class="step"><b>4 · <span class="he">אחזור היברידי</span><span class="en">Hybrid retrieval</span></b>
+    <span class="he">השאלה הופכת לווקטור, שני החיפושים רצים, והתוצאות ממוזגות ל-5 קטעים.</span>
+    <span class="en">The question becomes a vector, both searches run, and the results are merged into 5 chunks.</span>
+    <small><span class="he">קריאת API אחת (embedding לשאלה)</span><span class="en">One API call (embedding the question)</span></small></div>
+  <div class="arrow">↓</div>
+  <div class="step"><b>5 · <span class="he">תשובה</span><span class="en">Answer</span></b>
+    <span class="he">5 הקטעים והשאלה נשלחים למודל שפה, עם הוראה לענות רק מתוכם ולציין מקור.</span>
+    <span class="en">The 5 chunks and the question go to a language model, with an instruction to answer only from them and cite the source.</span>
+    <small><span class="he">קריאת API אחת</span><span class="en">One API call</span></small></div>
+  <div class="arrow">↓</div>
+  <div class="step"><b>6 · <span class="he">הערכה (לא חובה)</span><span class="en">Evaluation (optional)</span></b>
+    <span class="he">שלבים 4 ו-5 רצים על 8 שאלות שהתשובה עליהן ידועה.</span>
+    <span class="en">Steps 4 and 5 run over 8 questions with known answers.</span>
+    <small><span class="he">16 קריאות API</span><span class="en">16 API calls</span></small></div>
+</div>
+
+<!-- ================================================================ 4 -->
+<h2 id="models">
+  <span class="he">4. אילו מודלים עובדים</span>
+  <span class="en">4. Which models do the work</span>
+</h2>
+<p class="he">שלושה תפקידים, כולם של Google Gemini, דרך LangChain (<code>langchain-google-genai</code>). המפתח נקרא ממשתנה הסביבה <code>GOOGLE_API_KEY</code>.</p>
+<p class="en">Three roles, all Google Gemini, through LangChain (<code>langchain-google-genai</code>). The key is read from the <code>GOOGLE_API_KEY</code> environment variable.</p>
+
+<div class="tablewrap"><table>
+  <tr>
+    <th><span class="he">תפקיד</span><span class="en">Role</span></th>
+    <th><span class="he">מודל</span><span class="en">Model</span></th>
+    <th><span class="he">מקבל</span><span class="en">Receives</span></th>
+    <th><span class="he">מחזיר</span><span class="en">Returns</span></th>
+  </tr>
+  <tr>
+    <td><span class="he">תעתוק (ראייה)</span><span class="en">Transcription (vision)</span></td>
+    <td><code>gemini-3.5-flash-lite</code></td>
+    <td><span class="he">תמונת עמוד + הוראות תעתוק</span><span class="en">Page image + transcription prompt</span></td>
+    <td><span class="he">טקסט</span><span class="en">Text</span></td>
+  </tr>
+  <tr>
+    <td>Embeddings</td>
+    <td><code>gemini-embedding-2</code></td>
+    <td><span class="he">טקסט (קטע או שאלה)</span><span class="en">Text (a chunk or a question)</span></td>
+    <td><span class="he">וקטור של 3072 מספרים</span><span class="en">A vector of 3072 numbers</span></td>
+  </tr>
+  <tr>
+    <td><span class="he">תשובה (LLM)</span><span class="en">Answer (LLM)</span></td>
+    <td><code>gemini-3.5-flash-lite</code></td>
+    <td><span class="he">5 קטעים + השאלה</span><span class="en">5 chunks + the question</span></td>
+    <td><span class="he">תשובה עם ציון מקור</span><span class="en">Answer with a source citation</span></td>
+  </tr>
+</table></div>
+
+<p class="he">התעתוק והתשובה משתמשים באותו מודל, אבל אלה שתי קריאות שונות לגמרי עם הוראות שונות. מודל ה-embeddings הוא סוג אחר: הוא לא כותב טקסט, רק ממיר טקסט למספרים. השמות מוגדרים בראש <code>rag_skeleton.py</code>, ואפשר להחליף אותם בלי לגעת בקוד, דרך משתני סביבה:</p>
+<p class="en">Transcription and answering use the same model, but they are two entirely different calls with different prompts. The embeddings model is a different kind: it writes no text, it only turns text into numbers. The names are set at the top of <code>rag_skeleton.py</code> and can be swapped without touching the code, through environment variables:</p>
+
+<pre><code>VISION_MODEL    = os.getenv("RAG_VISION_MODEL",    "google_genai:gemini-3.5-flash-lite")
+ANSWER_MODEL    = os.getenv("RAG_ANSWER_MODEL",    "google_genai:gemini-3.5-flash-lite")
+EMBEDDING_MODEL = os.getenv("RAG_EMBEDDING_MODEL", "google_genai:gemini-embedding-2")</code></pre>
+
+<p class="he">הטעינה עצמה (מקוצר). <code>temperature=0</code> גורם למודל לענות באופן עקבי ולא "יצירתי":</p>
+<p class="en">The loading itself (shortened). <code>temperature=0</code> makes the model answer consistently rather than "creatively":</p>
+
+<pre><code>from langchain.chat_models import init_chat_model
+from langchain.embeddings import init_embeddings
+
+init_chat_model(name, temperature=0, max_retries=1, rate_limiter=limiter)
+embeddings = CountingEmbeddings(init_embeddings(EMBEDDING_MODEL), budget)</code></pre>
+
+<!-- ================================================================ 5 -->
+<h2 id="steps">
+  <span class="he">5. כל שלב, עם הקוד</span>
+  <span class="en">5. Each step, with the code</span>
+</h2>
+<p class="he">כל הקוד מתוך <code>rag_skeleton.py</code>. הקטעים מקוצרים וההערות הוסרו.</p>
+<p class="en">All code is from <code>rag_skeleton.py</code>. The excerpts are shortened and comments removed.</p>
+
+<h3><span class="he">שלב 1: תעתוק</span><span class="en">Step 1: Transcription</span></h3>
+<p class="he">התמונה מקודדת ל-base64 ונשלחת יחד עם ההוראות בהודעה אחת. ההוראות אומרות: לא לתרגם, לא לתקן כתיב, ולסמן מילים לא קריאות.</p>
+<p class="en">The image is base64-encoded and sent with the prompt in one message. The prompt says: do not translate, do not fix spelling, and mark unreadable words.</p>
+<pre><code>def transcribe(image, mime, vision_llm, budget):
+    budget.spend("תעתוק עמוד")
+    b64 = base64.b64encode(image).decode()
+    msg = HumanMessage(content=[
+        {"type": "text", "text": TRANSCRIBE_PROMPT},
+        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+    ])
+    return vision_llm.invoke([msg]).text</code></pre>
+<p class="he">לפני כל קריאה בודקים אם העמוד כבר תועתק. אם כן, קוראים מהדיסק ולא משלמים שוב:</p>
+<p class="en">Before each call the code checks whether the page was already transcribed. If so, it reads from disk and does not pay again:</p>
+<pre><code>def cache_path(path, page_no):
+    return CACHE_DIR / f"{path.name}_p{page_no}.json"     # transcripts/karta_1945.png_p1.json
+
+text = read_cache(path, page_no)
+if text is None:
+    image, mime = page_image(path, page_no)
+    text = transcribe(image, mime, vision_llm, budget)
+    cache_path(path, page_no).write_text(json.dumps({"text": text}, ensure_ascii=False), encoding="utf-8")
+docs.append(Document(page_content=text, metadata={"source": path.name, "page": page_no}))</code></pre>
+
+<h3><span class="he">שלב 2: Chunking</span><span class="en">Step 2: Chunking</span></h3>
+<p class="he">הטקסט נחתך לקטעים של עד 800 תווים, עם חפיפה של 150 תווים בין קטע לקטע, כדי שמשפט שנחתך באמצע יופיע שלם לפחות באחד מהם. החיתוך מעדיף פסקה, אחר כך שורה, אחר כך משפט.</p>
+<p class="en">The text is cut into chunks of up to 800 characters, with a 150-character overlap between neighbors, so a sentence cut in the middle appears whole in at least one. The cut prefers a paragraph break, then a line, then a sentence.</p>
+<pre><code>def split(docs):
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=800, chunk_overlap=150, separators=["\n\n", "\n", ". ", " "],
+    )
+    chunks = splitter.split_documents(docs)
+    for i, c in enumerate(chunks):
+        c.metadata["chunk_id"] = i
+    return chunks</code></pre>
+<div class="tablewrap"><table>
+  <tr><th><span class="he">הקטעים שלך</span><span class="en">Your chunks</span></th><th><span class="he">תווים</span><span class="en">Characters</span></th></tr>
+  <tr><td><code>bescheinigung_1942.jpg</code> p1</td><td class="num">592</td></tr>
+  <tr><td><code>karta_1945.png</code> p1</td><td class="num">489</td></tr>
+  <tr><td><code>letter_lodz_1939.jpg</code> p1</td><td class="num">550</td></tr>
+  <tr><td><code>residents_list_1941.png</code> p1</td><td class="num">682</td></tr>
+  <tr><td><code>testimony_318.pdf</code> p1</td><td class="num">742</td></tr>
+  <tr><td><code>testimony_318.pdf</code> p2</td><td class="num">604</td></tr>
+</table></div>
+<p class="he">כולם מתחת ל-800, ולכן אצלך אף עמוד לא נחתך: עמוד אחד = קטע אחד, 6 בסך הכול.</p>
+<p class="en">All are under 800, so in your case no page was cut: one page = one chunk, 6 in total.</p>
+
+<h3><span class="he">שלב 3: אינדקס</span><span class="en">Step 3: Index</span></h3>
+<p class="he">נבנים שני אינדקסים על אותם קטעים. הווקטורי תופס משמעות ("נגר" קרוב ל-"Tischler"). ה-BM25 תופס מילים מדויקות, שזה חשוב לשמות ולמספרים.</p>
+<p class="en">Two indexes are built over the same chunks. The vector one captures meaning ("נגר" is close to "Tischler", both carpenter). BM25 captures exact words, which matters for names and numbers.</p>
+<pre><code>class HybridRetriever:
+    def __init__(self, chunks, embeddings):
+        self.vector = InMemoryVectorStore.from_documents(chunks, embeddings)
+        self.bm25 = BM25Retriever.from_documents(chunks, k=TOP_K * 2, preprocess_func=tokenize)</code></pre>
+<p class="he">האינדקס עצמו לא נשמר לדיסק. ה-embedding של כל קטע נשמר בנפרד ב-<code>embcache</code>, לפי טביעת אצבע של הטקסט, ולכן בנייה מחדש שולחת ל-API רק קטעים חדשים או קטעים שהשתנו. כשאין שום דבר חדש, האתר בונה את האינדקס לבד בפתיחה, בלי קריאת API.</p>
+<p class="en">The index itself is not saved to disk. Each chunk's embedding is saved separately in <code>embcache</code>, keyed by a hash of its text, so a rebuild sends only new or changed chunks to the API. When nothing is new, the site builds the index on its own at startup with no API call.</p>
+
+<h3><span class="he">שלב 4: אחזור היברידי ומיזוג RRF</span><span class="en">Step 4: Hybrid retrieval and RRF fusion</span></h3>
+<pre><code>def search(self, query, k=TOP_K):                          # TOP_K = 5
+    ranked_lists = [
+        self.vector.similarity_search(query, k=k * 2),      # up to 10 by meaning
+        self.bm25.invoke(query),                            # up to 10 by words
+    ]
+    scores, by_id = {}, {}
+    for results in ranked_lists:
+        for rank, doc in enumerate(results):
+            cid = doc.metadata["chunk_id"]
+            scores[cid] = scores.get(cid, 0) + 1 / (60 + rank)
+            by_id[cid] = doc
+    best = sorted(scores, key=scores.get, reverse=True)[:k]
+    return [by_id[cid] for cid in best]</code></pre>
+<div class="he">
+<p><b>RRF</b> (Reciprocal Rank Fusion) ממזג שתי רשימות בלי להשוות ציונים, רק לפי מקום ברשימה. כל קטע מקבל <code>1/(60+מקום)</code> מכל רשימה, והמקום הראשון הוא 0.</p>
+<ul>
+  <li>קטע שראשון בשתי הרשימות: <span class="num">1/60 + 1/60 = 0.0333</span></li>
+  <li>קטע שאחרון (שישי) בשתיהן: <span class="num">1/65 + 1/65 = 0.0308</span></li>
+</ul>
+<p>כאן רואים שוב את התשובה לשאלה 1: כל רשימה מבקשת עד 10 קטעים, ויש רק 6, אז כל ששת הקטעים מקבלים ציון. 5 הראשונים חוזרים, ורק אחד נשאר בחוץ.</p>
+</div>
+<div class="en">
+<p><b>RRF</b> (Reciprocal Rank Fusion) merges two lists without comparing scores, only by position. Each chunk gets <code>1/(60+rank)</code> from each list, and first place is rank 0.</p>
+<ul>
+  <li>A chunk first in both lists: <span class="num">1/60 + 1/60 = 0.0333</span></li>
+  <li>A chunk last (sixth) in both: <span class="num">1/65 + 1/65 = 0.0308</span></li>
+</ul>
+<p>Here is the answer to question 1 again: each list asks for up to 10 chunks and there are only 6, so all six get a score. The top 5 are returned and only one is left out.</p>
+</div>
+
+<h3><span class="he">שלב 5: תשובה</span><span class="en">Step 5: Answer</span></h3>
+<p class="he">5 הקטעים מודבקים לתוך ההוראות, כל אחד עם כותרת של קובץ ועמוד, והשאלה בסוף. ההוראות (בעברית) אומרות: לענות רק מהקטעים, לציין מקור אחרי כל עובדה, לכתוב "לא נמצא במסמכים" אם אין תשובה, ולא לנחש שמות, תאריכים או מספרים.</p>
+<p class="en">The 5 chunks are pasted into the prompt, each with a file-and-page header, and the question comes last. The prompt (in Hebrew) says: answer only from the chunks, cite the source after every fact, write "לא נמצא במסמכים" if there is no answer, and do not guess names, dates or numbers.</p>
+<pre><code>def answer(question, retriever, llm, budget):
+    hits = retriever.search(question)
+    context = "\n\n".join(
+        f"[{d.metadata['source']}, עמוד {d.metadata['page']}]\n{d.page_content}" for d in hits
+    )
+    budget.spend("תשובה לשאלה")
+    reply = llm.invoke(ANSWER_PROMPT.format(context=context, question=question)).text
+    return reply, hits</code></pre>
+<p class="he">המודל לא "זוכר" את המסמכים ולא אומן עליהם. הוא רואה רק את 5 הקטעים שנשלחו אליו באותה קריאה. זו כל המשמעות של RAG: מחפשים קודם, ואז נותנים למודל לקרוא.</p>
+<p class="en">The model does not "remember" the documents and was not trained on them. It sees only the 5 chunks sent in that call. That is the whole meaning of RAG: search first, then let the model read.</p>
+
+<!-- ================================================================ 6 -->
+<h2 id="where">
+  <span class="he">6. איפה הכול נשמר</span>
+  <span class="en">6. Where everything is stored</span>
+</h2>
+<div class="tablewrap"><table>
+  <tr>
+    <th><span class="he">מה</span><span class="en">What</span></th>
+    <th><span class="he">איפה</span><span class="en">Where</span></th>
+    <th><span class="he">הערות</span><span class="en">Notes</span></th>
+  </tr>
+  <tr>
+    <td><span class="he">המסמכים הסרוקים</span><span class="en">The scanned documents</span></td>
+    <td><code>docs/</code></td>
+    <td><span class="he">5 קבצים, 6 עמודים</span><span class="en">5 files, 6 pages</span></td>
+  </tr>
+  <tr>
+    <td><span class="he">התעתוקים</span><span class="en">The transcripts</span></td>
+    <td><code>transcripts/&lt;file&gt;_p&lt;N&gt;.json</code></td>
+    <td><span class="he">קובץ JSON קטן לכל עמוד. אפשר לפתוח ולקרוא, ואפילו לתקן ידנית.</span><span class="en">One small JSON file per page. You can open and read them, even fix them by hand.</span></td>
+  </tr>
+  <tr>
+    <td><span class="he">הקטעים והווקטורים</span><span class="en">The chunks and vectors</span></td>
+    <td><code>transcripts/embcache_google_genai_gemini_embedding_2.json</code></td>
+    <td><span class="he">קובץ אחד: לכל קטע (לפי טביעת האצבע של הטקסט) הווקטור שלו, 3072 מספרים.</span><span class="en">One file: for each chunk (keyed by a hash of its text) its vector, 3072 numbers.</span></td>
+  </tr>
+  <tr>
+    <td><span class="he">אינדקס BM25</span><span class="en">The BM25 index</span></td>
+    <td><span class="he">בזיכרון בלבד</span><span class="en">In memory only</span></td>
+    <td><span class="he">נבנה מחדש בכל הפעלה. מהיר וחינמי.</span><span class="en">Rebuilt on every start. Fast and free.</span></td>
+  </tr>
+  <tr>
+    <td><span class="he">שאלות ההערכה</span><span class="en">The evaluation questions</span></td>
+    <td><code>eval_set.json</code></td>
+    <td><span class="he">8 שאלות: שאלה, מילה צפויה, קובץ מקור.</span><span class="en">8 questions: question, expected word, source file.</span></td>
+  </tr>
+  <tr>
+    <td><span class="he">היסטוריית השאלות</span><span class="en">Question history</span></td>
+    <td><span class="he">בזיכרון הדפדפן בלבד</span><span class="en">Browser session only</span></td>
+    <td><span class="he">נמחקת כשסוגרים את הממשק.</span><span class="en">Gone when you close the app.</span></td>
+  </tr>
+</table></div>
+<p class="he">כך נראה קטע אחד בתוך קובץ האינדקס:</p>
+<p class="en">This is what one chunk looks like inside the index file:</p>
+<pre><code>{
+  "id": "...",
+  "vector": [0.0123, -0.0456, ...],          // 3072 numbers
+  "text": "Der Aelteste der Juden in Litzmannstadt ...",
+  "metadata": {"source": "bescheinigung_1942.jpg", "page": 1, "chunk_id": 0}
+}</code></pre>
+
+<!-- ================================================================ 7 -->
+<h2 id="db">
+  <span class="he">7. האם יש Vector DB?</span>
+  <span class="en">7. Is there a vector database?</span>
+</h2>
+<div class="he">
+<p><b>לא. אין שרת מסד נתונים בפרויקט.</b> הקוד משתמש ב-<code>InMemoryVectorStore</code> של LangChain: רשימה של וקטורים בזיכרון של Python. בחיפוש הוא משווה את וקטור השאלה לכל אחד מהם (דמיון קוסינוס) ומחזיר את הקרובים ביותר. כדי לא לחשב שוב בכל הפעלה, הרשימה נשמרת לקובץ JSON ונטענת ממנו.</p>
+<p>ל-6 קטעים, וגם לכמה אלפים, זה מספיק לגמרי.</p>
+<p><b>Chroma מותקן אצלך אבל לא בשימוש.</b> ברשימת החבילות של המורה יש <code>langchain_chroma</code>, שהוא Vector DB אמיתי שנשמר לדיסק. סביר שתשתמשו בו בהמשך הקורס. ההחלפה קטנה, כי שניהם מציעים את אותן פעולות:</p>
+</div>
+<div class="en">
+<p><b>No. There is no database server in this project.</b> The code uses LangChain's <code>InMemoryVectorStore</code>: a list of vectors in Python's memory. On search it compares the question's vector with each of them (cosine similarity) and returns the closest. To avoid recomputing on every start, the list is saved to a JSON file and loaded from it.</p>
+<p>For 6 chunks, and for a few thousand, this is entirely enough.</p>
+<p><b>Chroma is installed on your machine but not used.</b> Your teacher's package list includes <code>langchain_chroma</code>, a real vector database that persists to disk. You will likely use it later in the course. The swap is small, because both offer the same operations:</p>
+</div>
+<pre><code># today
+from langchain_core.vectorstores import InMemoryVectorStore
+store = InMemoryVectorStore.from_documents(chunks, embeddings)
+
+# with Chroma (not in your code today)
+from langchain_chroma import Chroma
+store = Chroma.from_documents(chunks, embeddings, persist_directory="chroma_db")</code></pre>
+<p class="he">מתי כן צריך מסד נתונים אמיתי: כשיש מאות אלפי קטעים, כשרוצים להוסיף מסמך בלי לבנות הכול מחדש, או כשרוצים לסנן לפי מטא-דאטה (למשל רק מסמכים משנת 1941).</p>
+<p class="en">When a real database is needed: with hundreds of thousands of chunks, when you want to add a document without rebuilding everything, or when you want to filter by metadata (for example only documents from 1941).</p>
+
+<!-- ================================================================ 8 -->
+<h2 id="cost">
+  <span class="he">8. הגנות עלות</span>
+  <span class="en">8. Cost guards</span>
+</h2>
+<p class="he">כל קריאת API עוברת דרך מונה אחד. מעבר לתקרה, התוכנית נעצרת עם הודעה.</p>
+<p class="en">Every API call goes through one counter. Past the limit, the program stops with a message.</p>
+<pre><code>class Budget:
+    def spend(self, what):
+        if self.used >= self.limit:        # limit = 60 calls per run
+            raise BudgetExceeded(...)
+        self.used += 1</code></pre>
+<div class="tablewrap"><table>
+  <tr>
+    <th><span class="he">פעולה</span><span class="en">Action</span></th>
+    <th><span class="he">קריאות API</span><span class="en">API calls</span></th>
+  </tr>
+  <tr><td><span class="he">תעתוק 6 העמודים (פעם ראשונה בלבד)</span><span class="en">Transcribing the 6 pages (first time only)</span></td><td class="num">6</td></tr>
+  <tr><td><span class="he">בניית האינדקס (פעם ראשונה בלבד)</span><span class="en">Building the index (first time only)</span></td><td class="num">1</td></tr>
+  <tr><td><span class="he">שאלה אחת</span><span class="en">One question</span></td><td class="num">2</td></tr>
+  <tr><td><span class="he">הרצת ההערכה (8 שאלות)</span><span class="en">Running the evaluation (8 questions)</span></td><td class="num">16</td></tr>
+</table></div>
+<div class="he">
+<ul>
+  <li>תקרה של 60 קריאות בהפעלה (<code>RAG_MAX_API_CALLS</code>) ושל 30 עמודים חדשים (<code>RAG_MAX_PAGES</code>).</li>
+  <li>המתנה של 4.5 שניות בין קריאות, כדי לא לעבור את מגבלת הבקשות לדקה.</li>
+  <li>שגיאת API עוצרת מיד, עם ניסיון חוזר אחד לכל היותר.</li>
+  <li><code>RAG_FAKE=1</code> מריץ הכול עם מודלים מדומים, בלי אף קריאה.</li>
+</ul>
+</div>
+<div class="en">
+<ul>
+  <li>A limit of 60 calls per run (<code>RAG_MAX_API_CALLS</code>) and 30 new pages (<code>RAG_MAX_PAGES</code>).</li>
+  <li>A 4.5-second wait between calls, to stay under the requests-per-minute limit.</li>
+  <li>An API error stops immediately, with at most one retry.</li>
+  <li><code>RAG_FAKE=1</code> runs everything with stand-in models and no calls at all.</li>
+</ul>
+</div>
+
+</main>
+
+<script>
+  function setLang(lang) {
+    document.body.dataset.lang = lang;
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === "he" ? "rtl" : "ltr";
+    try { localStorage.setItem("rag-doc-lang", lang); } catch (e) {}
+  }
+  try {
+    var saved = localStorage.getItem("rag-doc-lang");
+    if (saved === "en" || saved === "he") setLang(saved);
+  } catch (e) {}
+</script>
+</body>
+</html>

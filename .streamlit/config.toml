@@ -1,0 +1,26 @@
+# ערכת העיצוב של Streamlit: צבעים, גופנים ופינות של כל הרכיבים המובנים
+# (כפתורים, שדות, לשוניות). העיצוב של הרכיבים שלנו (כרטיסים, תגיות) נמצא ב-style.css.
+# אותם צבעים מופיעים גם בראש style.css - אם משנים כאן, לשנות גם שם.
+
+[theme]
+base = "light"
+primaryColor = "#8B3A2B"                # אדום-חותמת: כפתור ראשי, לשונית פעילה
+backgroundColor = "#F5F0E6"             # נייר
+secondaryBackgroundColor = "#FCFAF5"    # רקע של שדות קלט
+textColor = "#2A2520"                   # דיו
+borderColor = "#D5CAB4"
+linkColor = "#8B3A2B"
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "0.35rem"
+
+# הגופנים נטענים מ-Google Fonts. בלי אינטרנט הדפדפן יציג גופן מערכת במקומם.
+font = "Heebo:https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap, sans-serif"
+headingFont = "'Frank Ruhl Libre':https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&display=swap, serif"
+
+[theme.sidebar]
+backgroundColor = "#ECE4D2"             # תיקיית קרטון
+secondaryBackgroundColor = "#F8F4EA"
+
+[client]
+toolbarMode = "minimal"            # מסתיר את כפתור Deploy של Streamlit

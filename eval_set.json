@@ -1,0 +1,10 @@
+[
+  {"question": "מי חתום על המכתב שנשלח מלודז' לשמואל ויינברג?", "expected": "חיים", "source": "letter_lodz_1939.jpg"},
+  {"question": "מה המקצוע של מנחם גולדשטיין לפי רשימת הדיירים?", "expected": "חייט", "source": "residents_list_1941.png"},
+  {"question": "באיזו שנה נולדה מרים זילברברג?", "expected": "1925", "source": "residents_list_1941.png"},
+  {"question": "מה מספר אישור העבודה (Bescheinigung) של חיים ויינברג?", "expected": "4471", "source": "bescheinigung_1942.jpg"},
+  {"question": "מה מספר כרטיס הרישום של רבקה רוזנצווייג משנת 1945?", "expected": "2086", "source": "karta_1945.png"},
+  {"question": "באיזו אנייה עלתה העדה רבקה רוזנצווייג לארץ?", "expected": "עצמאות", "source": "testimony_318.pdf"},
+  {"question": "באיזו שנה נפטר אביה של העדה בגטו?", "expected": "1942", "source": "testimony_318.pdf"},
+  {"question": "באיזה בית ספר למד דוד קפלן?", "expected": "לא נמצא", "source": "residents_list_1941.png"}
+]
